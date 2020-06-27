@@ -1,15 +1,15 @@
 %% load spike times & clusters & manual clusters
 % open all clusters to see what clusters there are
-folder = 'C:\Users\Nutzer\Google Drive\1 Uni\1.3 Uni Projekte\Masterarbeit Laborarbeit Neuroscience\Data Analysis\JG14_190621\electrophysiology';
+folder = 'C:\Users\User\Google Drive\3 Projekte\Masterarbeit Laborarbeit Neuroscience\1 Data Analysis\JG14_190621\electrophysiology';
 spike_times = readNPY(fullfile(folder, 'spike_times.npy'));
 spike_clusters = readNPY(fullfile(folder, 'spike_clusters.npy'));
 cluster_group = tdfread(fullfile(folder, 'cluster_group.tsv'));
 cluster_info = tdfread(fullfile(folder, 'cluster_info.tsv'));
 
 % load ttl times and convert to necessary format
-load('C:\Users\Nutzer\Google Drive\1 Uni\1.3 Uni Projekte\Masterarbeit Laborarbeit Neuroscience\Data Analysis\JG14_190621\ttl_behavior_trials');
+load('C:\Users\User\Google Drive\3 Projekte\Masterarbeit Laborarbeit Neuroscience\1 Data Analysis\JG14_190621\ttl_behavior_trials');
 %ttl_times = ground_truth_trial;
-load('C:\Users\Nutzer\Google Drive\1 Uni\1.3 Uni Projekte\Masterarbeit Laborarbeit Neuroscience\Data Analysis\JG14_190621\ttl_times.mat');
+load('C:\Users\User\Google Drive\3 Projekte\Masterarbeit Laborarbeit Neuroscience\1 Data Analysis\JG14_190621\ttl_times.mat');
 clear('ground_truth_trial');
 
 behavior_vec = ttl_times(:,[2,15]);
