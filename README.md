@@ -1,2 +1,2 @@
-# 1.4-klausbergerlab-spikes
+# 1.4-spikes
  Matalb analysation scripts for sorted spikes 
