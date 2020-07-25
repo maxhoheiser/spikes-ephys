@@ -5,76 +5,134 @@ import csv
 import scipy.stats as st
 import platform
 import os
+from os import path
 
 # for pylatex
 from pylatex import Document, Section, Subsection, Command, Package, NewPage, LongTabu, Tabular
 from pylatex.utils import italic, NoEscape
 
-class SpikeAnalysis():
-    def __init__(self, session, main_folder, gamble_side):
+
+class SpikesLoader():
+    def __init__(self, session, main_folder):
         self.folder = main_folder
-        self.spikes_df, self.clusters_df, self.trials_df = self.load_files()
-        self.session = session
-        self.gamble_side = gamble_side
+        #self.spikes_df, self.clusters_df, self.trials_df = self.load_files()
+        self.session = self.load_files()
 
     # load files from kilosort & behavior files
-    def load_files(self):
-        """
+    def load_files(self, update=False):
+        """[summary]
 
-        """
-        if platform.system() == 'Linux':
-            # load fies in liux
-            spike_times = np.load(self.folder+r"/electrophysiology/spike_times.npy")
-            spike_cluster = np.load(self.folder+r"/electrophysiology/spike_clusters.npy")
-            clusters_df = pd.read_csv(self.folder+r"/electrophysiology/cluster_info.tsv", sep='\t')
-            excel_df = pd.read_excel(self.folder+"/output_file.xlsx", 'Daten', header=[0, 1] )
-
-        elif platform.system() == 'Windows':
-            # load files in Windows
-            spike_times = np.load(self.folder+r"\electrophysiology\spike_times.npy")
-            spike_cluster = np.load(self.folder+r"\electrophysiology\spike_clusters.npy")
-            clusters_df = pd.read_csv(self.folder+r"\electrophysiology\cluster_info.tsv", sep='\t')
-            excel_df = pd.read_excel(self.folder+r"\output_file.xlsx", 'Daten', header=[0, 1] )
-
-        # create spike Data Frame with clusters and spike times
-        spikes_df = pd.DataFrame( { 'cluster':spike_cluster, 'spike_times': spike_times[:,0] } )
-        spikes_df.index.name = 'global index'
-        # set indexes for each clusters
-        spikes_df = spikes_df.set_index((spikes_df.groupby('cluster').cumcount()).rename('cluster index'), append=True)
-        # clean up cluster data frame
-        clusters_df = clusters_df.rename(columns={'id':'cluster id'})
-        clusters_df = clusters_df.set_index('cluster id')
-        # create 'spikes' colum with spiketimes
-        spk = pd.DataFrame( {'spikes':np.zeros(clusters_df.shape[0], dtype=object)}, index=clusters_df.index )
-        for group, frame in spikes_df.groupby('cluster'):
-            spk['spikes'][group] = frame['spike_times'].values
-        #merge spike column with clusters_df
-        clusters_df = pd.merge(clusters_df, spk, how='right', left_index=True, right_index=True)
-
-        # clean up trials data Frame
-        # create cleaned up data frame with each trial in one row and times and behavior
-        trials_df = excel_df.loc[:]['TTL']
-        # set trials ans index and name as trials
-        trials_df = trials_df.set_index('trial-num')
-        trials_df.index.name = 'trial'
-        # rename colums to aprop names
-        trials_df = trials_df.rename(columns={'reward':'event','time 1':'start', 'time 2':'cue', 'time 3':'sound','time 4':'openl','time reward':'reward','time inter trial in.':'iti','time inter trial end':'end', 'time dif trial':'length_ms', 'ttl start rel':'rel'})
-        # drop all unnecessary colums
-        trials_df = trials_df.drop(['dif ttl - excel', 'diff round', 'excel start rel', 'start rel dif', 'TIstarts','IND-CUE_pres_start','SOUND_start', 'resp-time-window_start', 'ITIstarts','ITIends', 'time dif trial round', 'rel'], axis = 1 )
-        # drop al rows with only 0
-        trials_df = trials_df.drop(trials_df[trials_df['start']==0].index, axis=0)
-        # convert times in ms to count 20k per second (*20)
-        trials_df.loc[:,'start':'end']*=20
-        # convert all time columns to int64
-        trials_df = trials_df.astype({'start': int, 'cue': int, 'sound': int, 'openl': int, 'reward': int, 'iti': int, 'end': int})
-        # calculate trial length in clicks
-        trials_df['length']=trials_df['end']-trials_df['start']
-        trials_df['select']=np.full((trials_df.shape[0] ,1), True ,dtype='bool')
-        return (spikes_df, clusters_df, trials_df)
+        Returns:
+            session ([dict]): [deictionary containing:
+                                trials_df ([dataframe]): []
+                                spikes_df ([dataframe]): []
+                                clusters_df ([dataframe]): []
+                            ]
+        """        
+        # check if pd files of trials_df, spikes_df, and clusters_df exist for given session
+        files = ['trials_df.pd', 'spikes_df.pd', 'clusters_df.pd']
+        files_exist = [ path.exists( os.path.join(self.folder, fi) ) for fi in files ]
+        if update and all(files_exist):
+            session = dict()
+            session['trials_df'] = pd.read_pickle(os.path.join(self.folder, 'trials_df.pd'), compression='gzip' )
+            session['spikes_df'] = pd.read_pickle(os.path.join(self.folder, 'spikes_df.pd'), compression='gzip' )
+            session['clusters_df'] = pd.read_pickle(os.path.join(self.folder, 'clusters_df.pd'), compression='gzip' )
 
 
+        else:
+            # load spike times npy
+            spike_times = np.load(os.path.join(self.folder, "/electrophysiology/spike_times.npy"))
+            # load spike cluster asignment
+            spike_cluster = np.load(os.path.join(self.folder, "/electrophysiology/spike_clusters.npy"))
+            # load cluster information
+            clusters_df = pd.read_csv(os.path.join(self.folder, "/electrophysiology/cluster_info.tsv", sep='\t'))
+            # load trial information
+            excel_df = pd.read_excel(os.path.join(self.folder, "/output_file.xlsx", 'Daten', header=[0, 1] ))
 
-# Helper Functions EDA =================================================================================================
+            # create spike Data Frame with clusters and spike times
+            spikes_df = pd.DataFrame( { 'cluster':spike_cluster, 'spike_times': spike_times[:,0] } )
+            spikes_df.index.name = 'global index'
+            # set indexes for each clusters
+            spikes_df = spikes_df.set_index((spikes_df.groupby('cluster').cumcount()).rename('cluster index'), append=True)
+            # clean up cluster data frame
+            clusters_df = clusters_df.rename(columns={'id':'cluster id'})
+            clusters_df = clusters_df.set_index('cluster id')
+            # create 'spikes' colum with spiketimes
+            spk = pd.DataFrame( {'spikes':np.zeros(clusters_df.shape[0], dtype=object)}, index=clusters_df.index )
+            for group, frame in spikes_df.groupby('cluster'):
+                spk['spikes'][group] = frame['spike_times'].values
+            #merge spike column with clusters_df
+            clusters_df = pd.merge(clusters_df, spk, how='right', left_index=True, right_index=True)
+
+            # clean up trials data Frame
+            # create cleaned up data frame with each trial in one row and times and behavior
+            trials_df = excel_df.loc[:]['TTL']
+            # set trials ans index and name as trials
+            trials_df = trials_df.set_index('trial-num')
+            trials_df.index.name = 'trial'
+            # rename colums to aprop names
+            trials_df = trials_df.rename(columns={'reward':'event','time 1':'start', 'time 2':'cue', 'time 3':'sound','time 4':'openl','time reward':'reward','time inter trial in.':'iti','time inter trial end':'end', 'time dif trial':'length_ms', 'ttl start rel':'rel'})
+            # drop all unnecessary colums
+            trials_df = trials_df.drop(['dif ttl - excel', 'diff round', 'excel start rel', 'start rel dif', 'TIstarts','IND-CUE_pres_start','SOUND_start', 'resp-time-window_start', 'ITIstarts','ITIends', 'time dif trial round', 'rel'], axis = 1 )
+            # drop al rows with only 0
+            trials_df = trials_df.drop(trials_df[trials_df['start']==0].index, axis=0)
+            # convert times in ms to count 20k per second (*20)
+            trials_df.loc[:,'start':'end']*=20
+            # convert all time columns to int64
+            trials_df = trials_df.astype({'start': int, 'cue': int, 'sound': int, 'openl': int, 'reward': int, 'iti': int, 'end': int})
+            # calculate trial length in clicks
+            trials_df['length']=trials_df['end']-trials_df['start']
+            trials_df['select']=np.full((trials_df.shape[0] ,1), True ,dtype='bool')
+
+            # create sesion dictionary
+            session = dict()
+            session['spikes_df'] = spikes_df
+            session['clusters_df'] = clusters_df
+            session['trials_df'] = trials_df
+
+        return session
+
+    def save_files(self, export=False):
+        """[save clusters_df, spikes_df and trials_df to pickl or if export=True to csv]
+
+        Args:
+            export (bool, optional): [specify if True: export to csv, if False: save to pickl]. Defaults to False.
+        """        
+        if export:
+            self.session['clusters_df'].to_csv(os.path.join(self.folder, 'clusters_df.csv') )
+            self.session['spikes_df'].to_csv(os.path.join(self.folder, 'spikes_df.csv') )
+            self.session['trials_df'].to_csv(os.path.join(self.folder, 'trials_df.csv') )
+        else:
+            self.session['clusters_df'].to_pickle(os.path.join(self.folder, 'clusters_df.pd'), compression='gzip' )
+            self.session['spikes_df'].to_pickle(os.path.join(self.folder, 'spikes_df.pd'), compression='gzip' )
+            self.session['trials_df'].to_pickle(os.path.join(self.folder, 'trials_df.pd'), compression='gzip' )
+
+
+
+
+#======================================================================================================================================================================
+
+class SpikeEDA():
+    """[summary]
+    """    
+    def __init__(self, data, session, main_folder, params):
+        """[initialize session analyse object]
+
+        Args:
+            data ([toubple]): [(spikes_df, clusters_df, trials_df)]
+            session ([string]): [session folder]
+            main_folder ([type]): [description]
+            params ([dict]): [dictionary with all necessary infromation
+                                params['gamble_side] ([string]): [gamble side]
+                            ]
+        """        
+        self.folder = main_folder
+        self.spikes_df, self.clusters_df, self.trials_df = data
+        self.session = session
+        self.params = params
+
+
+ # Helper Functions EDA =================================================================================================
     # find spikes between
     def get_spikes_for_trial(self, array, start, stop): #old
         '''
@@ -177,7 +235,7 @@ class SpikeAnalysis():
 
         return isis
 
-# Plotting ==========================================================================================================
+ # Plotting ==========================================================================================================
 
     # plot histogram of trial times & normal fitted cuve
     def plt_trial_hist_and_fit(self, df):
@@ -231,6 +289,7 @@ class SpikeAnalysis():
         # Tweak spacing to prevent clipping of ylabel
         fig.tight_layout()
         return fig, ax
+
     def new_plt_spike_train(self, cluster, trials_df): #new
         """
         def: plots the spike trins fro each trial stacked on top of each other
@@ -595,9 +654,7 @@ class SpikeAnalysis():
 
     # firing frequency binned ==========
 
-
-
-# Save all & Create Report ===================================================================================================
+ # Save all & Create Report ===================================================================================================
     # save images of spike train and histogram plot for all good clusters for all reward event
     def save_plt_spike_train_hist_reward(self, window, update=False):
         """
@@ -833,7 +890,7 @@ class SpikeAnalysis():
                                 with doc.create(Tabular("r r")) as small_table:
                                     small_table.add_row(["Summary",""])
                                     small_table.add_hline()
-                                    small_table.add_row(["Gamble side:", self.gamble_side])
+                                    small_table.add_row(["Gamble side:", self.params['gamble_side']])
 
                             # create details table
                             with doc.create(LongTabu("X | X")) as details_table:
@@ -854,3 +911,8 @@ class SpikeAnalysis():
         doc.generate_pdf(filename, clean=True, clean_tex=False)#, compiler='latexmk -f -xelatex -interaction=nonstopmode')
 
     # create interactive webpage
+
+
+#======================================================================================================================================================================
+
+class SpikeModeling():
