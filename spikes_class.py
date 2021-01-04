@@ -36,6 +36,13 @@ class SpikeAnalysis():
             clusters_df = pd.read_csv(self.folder+r"\electrophysiology\cluster_info.tsv", sep='\t')
             excel_df = pd.read_excel(self.folder+r"\output_file.xlsx", 'Daten', header=[0, 1] )
 
+        elif platform.system() == 'Darwin':
+            # load fies in liux
+            spike_times = np.load(self.folder+r"/electrophysiology/spike_times.npy")
+            spike_cluster = np.load(self.folder+r"/electrophysiology/spike_clusters.npy")
+            clusters_df = pd.read_csv(self.folder+r"/electrophysiology/cluster_info.tsv", sep='\t')
+            excel_df = pd.read_excel(self.folder+"/output_file.xlsx", 'Daten', header=[0, 1] )
+
         # create spike Data Frame with clusters and spike times
         spikes_df = pd.DataFrame( { 'cluster':spike_cluster, 'spike_times': spike_times[:,0] } )
         spikes_df.index.name = 'global index'
@@ -52,6 +59,10 @@ class SpikeAnalysis():
         clusters_df = pd.merge(clusters_df, spk, how='right', left_index=True, right_index=True)
 
         # clean up trials data Frame
+        # drop NaN from loaded excel
+        excel_df.dropna(axis=0, how='all', inplace=True)
+        # drop 0 leading rows from loaded excel
+        excel_df = excel_df.loc[(excel_df.iloc[:,[1,2,3,4,5,6,7,8]]!=0).sum(axis=1)==8, :]
         # create cleaned up data frame with each trial in one row and times and behavior
         trials_df = excel_df.loc[:]['TTL']
         # set trials ans index and name as trials
