@@ -11,11 +11,13 @@ from pylatex import Document, Section, Subsection, Command, Package, NewPage, Lo
 from pylatex.utils import italic, NoEscape
 
 class SpikeAnalysis():
-    def __init__(self, session, main_folder, gamble_side):
-        self.folder = main_folder
-        self.spikes_df, self.clusters_df, self.trials_df = self.load_files()
-        self.session = session
-        self.gamble_side = gamble_side
+    def __init__(self, behavior_obj):
+        self.folder = behavior_obj.folder
+        self.trials_df = behavior_obj.trials_df
+        self.good_trials_df = behavior_obj.good_trials_df
+        self.spikes_df, self.clusters_df = self.load_files()
+        self.session = behavior_obj.session
+        self.gamble_side = behavior_obj.gamble_side
 
     # load files from kilosort & behavior files
     def load_files(self):
@@ -27,21 +29,21 @@ class SpikeAnalysis():
             spike_times = np.load(self.folder+r"/electrophysiology/spike_times.npy")
             spike_cluster = np.load(self.folder+r"/electrophysiology/spike_clusters.npy")
             clusters_df = pd.read_csv(self.folder+r"/electrophysiology/cluster_info.tsv", sep='\t')
-            excel_df = pd.read_excel(self.folder+"/output_file.xlsx", 'Daten', header=[0, 1] )
+            #excel_df = pd.read_excel(self.folder+"/output_file.xlsx", 'Daten', header=[0, 1] )
 
         elif platform.system() == 'Windows':
             # load files in Windows
             spike_times = np.load(self.folder+r"\electrophysiology\spike_times.npy")
             spike_cluster = np.load(self.folder+r"\electrophysiology\spike_clusters.npy")
             clusters_df = pd.read_csv(self.folder+r"\electrophysiology\cluster_info.tsv", sep='\t')
-            excel_df = pd.read_excel(self.folder+r"\output_file.xlsx", 'Daten', header=[0, 1] )
+            #excel_df = pd.read_excel(self.folder+r"\output_file.xlsx", 'Daten', header=[0, 1] )
 
         elif platform.system() == 'Darwin':
             # load fies in liux
             spike_times = np.load(self.folder+r"/electrophysiology/spike_times.npy")
             spike_cluster = np.load(self.folder+r"/electrophysiology/spike_clusters.npy")
             clusters_df = pd.read_csv(self.folder+r"/electrophysiology/cluster_info.tsv", sep='\t')
-            excel_df = pd.read_excel(self.folder+"/output_file.xlsx", 'Daten', header=[0, 1] )
+            #excel_df = pd.read_excel(self.folder+"/output_file.xlsx", 'Daten', header=[0, 1] )
 
         # create spike Data Frame with clusters and spike times
         spikes_df = pd.DataFrame( { 'cluster':spike_cluster, 'spike_times': spike_times[:,0] } )
@@ -58,7 +60,7 @@ class SpikeAnalysis():
         #merge spike column with clusters_df
         clusters_df = pd.merge(clusters_df, spk, how='right', left_index=True, right_index=True)
 
-        # clean up trials data Frame
+        """# clean up trials data Frame
         # drop NaN from loaded excel
         excel_df.dropna(axis=0, how='all', inplace=True)
         # drop 0 leading rows from loaded excel
@@ -80,8 +82,8 @@ class SpikeAnalysis():
         trials_df = trials_df.astype({'start': int, 'cue': int, 'sound': int, 'openl': int, 'reward': int, 'iti': int, 'end': int})
         # calculate trial length in clicks
         trials_df['length']=trials_df['end']-trials_df['start']
-        trials_df['select']=np.full((trials_df.shape[0] ,1), True ,dtype='bool')
-        return (spikes_df, clusters_df, trials_df)
+        trials_df['select']=np.full((trials_df.shape[0] ,1), True ,dtype='bool')"""
+        return (spikes_df, clusters_df)
 
 
 

@@ -12,7 +12,7 @@ import datetime
 class SyncPhenosys():
     """[# synchronisation class for Phenosys Behavior Recording and Neuron Electrophysiology Recording]
     """    
-    def __init__(self, session, folder, channel_no=6, info_channel=1):
+    def __init__(self, session, folder, channel_no=6, info_channel=1, rows_missing_ttl=[]):
         """[summary]
 
         Args:
@@ -29,6 +29,9 @@ class SyncPhenosys():
         self.ttl_event_dict=self.create_dict()
         self.ttl_info_channel = self.convert_ttl_to_event('channel '+str(info_channel))
         self.csv = self.load_csv()
+        self.rows_missing_ttl = rows_missing_ttl
+        self.combined_df = self.combine_dataframes()
+        self.trials_df, self.good_trials_df =  self.get_trials()
 
 
  # Load & manipulate Intern binary Data ====================================================================
@@ -139,12 +142,12 @@ class SyncPhenosys():
         csv = pd.read_csv(csv_file, delimiter=',', encoding='utf-16', header=0, skiprows=[1])
         csv.columns=['Event Time', 'Event', 'Probability', 'Side']
         
-        # get gambl side
-        gambl_string = csv.loc[ csv['Side'].notnull(), 'Side'].values[0]
-        if 'RIGHT' in gambl_string:
-            self.gambl_side = 'right'
-        if 'LEFT' in gambl_string:
-            self.gambl_side = 'left'
+        # get gamble side
+        gamble_string = csv.loc[ csv['Side'].notnull(), 'Side'].values[0]
+        if 'RIGHT' in gamble_string:
+            self.gamble_side = 'right'
+        if 'LEFT' in gamble_string:
+            self.gamble_side = 'left'
     
         # drop side column
         csv.drop('Side', axis=1, inplace=True)
@@ -203,7 +206,7 @@ class SyncPhenosys():
 
  # Align and Find Symmetry =================================================================================
     # helper function to insert a nan value to rows missing
-    def Insert_row(self, row_number, df, row_value): 
+    def Insert_row(self, row_number, df, row_value, column='all'): 
         # Starting value of upper half 
         start_upper = 0
         # End value of upper half 
@@ -230,13 +233,13 @@ class SyncPhenosys():
         return df 
 
     # create combined dataframe
-    def combine_dataframes(self, missing_rows_ttl, missing_rows_csv, ttl_channel, csv, align=False):
+    def combine_dataframes(self, align=False):
 
         ttl_combined = self.ttl_signals['channel 1'].copy()
         ttl_combined.columns=(['TTL Start', 'TTL Length', 'TTL Event'])
 
-        for row in missing_rows_ttl:
-            ttl_combined = self.Insert_row(row, ttl_combined, np.nan)
+        for row in self.rows_missing_ttl:
+            ttl_combined = self.insert_row(row, ttl_combined, np.nan, column='all')
 
         ttl_combined.reset_index(inplace=True, drop=True)
         ttl_combined['TTL Start norm'] = ttl_combined['TTL Start']-ttl_combined.loc[0, 'TTL Start']
@@ -258,18 +261,18 @@ class SyncPhenosys():
             return combined[['TTL Event','CSV Event','TTL Start norm','CSV Start norm','Delta (TTL-CSV)','TTL index','CSV index']]
         
         else:
-            
-
+            #csv = self.load_csv()
+            #print(csv.loc[(csv.loc[:,'Event']=='wheel is not stopping'),  'Start'].values)
             # add "wheel not stopping" event for each start row
-            n_stp_time = csv.loc[(csv.loc[:,'Event']=='wheel is not stopping'),  'Start'].values
+            n_stp_time = self.csv.loc[(self.csv.loc[:,'Event']=='wheel is not stopping'),  'Start'].values
             i = 0
             j = 0
             while i < combined.shape[0]-1:
                 if combined.loc[i,'CSV Event']=='start' and  combined.loc[i+1,'CSV Event']=='start':
                     combined = self.insert_row(i+1, 
                                             combined, 
-                                            ['CSV Start', 'CSV Event'], 
-                                            [n_stp_time[j],'wheel not stopping']
+                                            [n_stp_time[j],'wheel not stopping'],
+                                            ['CSV Start', 'CSV Event']
                                             )
                     # att wheel not stopping csv index
                     j += 1
@@ -333,7 +336,7 @@ class SyncPhenosys():
 
 
     # Function to insert row in the dataframe 
-    def insert_row(self, row_number, df, column, row_value): 
+    def insert_row(self, row_number, df, row_value, column='all'): 
         # Starting value of upper half 
         start_upper = 0
         # End value of upper half 
@@ -353,19 +356,110 @@ class SyncPhenosys():
         # Update the index of the dataframe 
         df.index = index_ 
         # Insert a row at the end 
-        df.loc[row_number,column] = row_value  
+        if column == 'all':
+            df.loc[row_number,:] = row_value  
+        else:
+            df.loc[row_number,column] = row_value  
         # Sort the index labels 
         df = df.sort_index() 
         df.reset_index()
         # return the dataframe 
         return df 
 
-
     # get good trials
-    def get_trials(self, combined):
+    """def get_trials(self, combined):
         trials = combined.loc[~np.isnan(combined.index.get_level_values('Trial')),['TTL Start', 'CSV Event']]
         trials.columns = ['Start', 'Event']
 
-        return trials
+        return trials"""
+
+    # get trials
+    # convert combined to trials including wheel not stopping
+    def get_trials(self,incl_wheel_ns=True):
+        #fix combined
+        ttl_norm = self.combined_df.loc[pd.IndexSlice[0,:,:,0],'TTL Start'].values[0]-self.combined_df.loc[pd.IndexSlice[0,:,:,0],'CSV Start'].values[0]
+        current_delta = 0
+        for index, row in self.combined_df.iterrows():
+            # patch ttl missing values
+            if np.isnan(row['TTL Start']):
+                self.combined_df.loc[index,'TTL Start'] = row['CSV Start']+ttl_norm+current_delta
+            else:
+                current_delta = row['Delta (TTL-CSV)']
+
+
+        trials_df = pd.DataFrame(columns=['index_all_trials','index_good_trials','start', 'cue', 'sound', 'openloop', 'reward', 'iti', 'end', 'event',
+                                'probability', 'length', 'select'])
+        trials_df['select']=True
+        
+        # iterate overall grouped frames
+        for group, frame in self.combined_df.groupby(level=0):
+            ttl_start = frame['TTL Start'].values
+            times = list(map(int, ttl_start))
+            length = int(ttl_start[-1]-ttl_start[0])
+            index_all = int(frame.index[0][0])
+            index_good = frame.index[0][1]
+            
+            if not np.isnan(index_good):
+                index_good = int(index_good)
+
+            if ttl_start.shape[0]==7:
+                event  = frame.loc[pd.IndexSlice[:,:,:,4],'CSV Event'].values[0]
+                #times = [int(i) if not np.isnan(i) else i for i in ttl_start ] 
+                
+                
+            elif ttl_start.shape[0]==2:
+                event = 'wheel not stopping'
+                times = times + [np.nan, np.nan, np.nan, np.nan, np.nan]
+                #csv_start = frame.loc[pd.IndexSlice[:,:,:,1],'CSV Start'].values[0]
+                #delta = frame.loc[pd.IndexSlice[:,:,:,0],'Delta (TTL-CSV)'].values[0]
+                #length = int(csv_start + delta)
+
+            probability = frame.loc[pd.IndexSlice[:,:,:,0],'CSV Probability'].values[0]
+
+            new_row = [index_all, index_good] + times + [event, probability, length, True]
+
+            trials_df.loc[trials_df.shape[0] + 1] = new_row
+
+
+        # set index_all_trials as dataframe index
+        trials_df.set_index('index_all_trials', inplace=True)
+
+        # right left and reward big column
+        trials_df['right']=False
+        trials_df['left']=False
+        trials_df['reward_given']=False
+
+        trials_df
+        trials_df.loc[trials_df['event']=='right_rw',['right','reward_given']]=True
+        trials_df.loc[trials_df['event']=='right_norw','right']=True
+        trials_df.loc[trials_df['event']=='left_rw',['left','reward_given']]=True
+        trials_df.loc[trials_df['event']=='left_norw','left']=True
+
+        trials_df['good']=False
+        trials_df.loc[trials_df['index_good_trials'].notna(),'good']=True
+
+        # create good trials dataframe
+        good_trials_df = trials_df.loc[trials_df['good'],:]
+        good_trials_df.set_index('index_good_trials',inplace=True)
+
+
+        return (trials_df, good_trials_df)
 
     # get all trials including wheel not stopping and 
+
+
+
+
+
+
+
+
+mac_folder = "/Users/max/Google Drive/3 Projekte/Masterarbeit Laborarbeit Neuroscience/1 Data Analysis"
+
+
+session = 'JG14_190621'
+folder = mac_folder + r"/" + session
+rows_missing_ttl = [1900,1931,1996,2058,2127]
+deselect_trials = [(0,6),(215,'end')]
+
+sync_obj = SyncPhenosys(session, folder, 7, 1, rows_missing_ttl) 

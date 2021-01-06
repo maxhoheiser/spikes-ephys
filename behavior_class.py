@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 class BehaviorAnalysis():
     """[behaviour analysis class for phenosys Behavior Recording and Neuron Electrophysiology Recording]
     """    
-    def __init__(self, session, folder, combined):
+    def __init__(self, sync_obj, deselect_trials=[]):
         """[summary]
 
         Args:
@@ -13,9 +13,20 @@ class BehaviorAnalysis():
             folder ([type]): [description]
             combined (pd): pandas datafame containing all the session information, from sync_class
         """        
-        self.session = session
-        self.folder = folder
-        self.combined = combined
+        self.session = sync_obj.session
+        self.folder = sync_obj.folder
+        self.combined_df = sync_obj.combined_df
+        self.gamble_side = sync_obj.gamble_side
+        self.deselect_trials = deselect_trials
+
+        self.trials_df = sync_obj.trials_df
+        self.good_trials_df = sync_obj.good_trials_df
+
+        for a,b in deselect_trials:
+            if b == 'end':
+                self.good_trials_df.loc[a:,'select'] = False
+            else:
+                self.good_trials_df.loc[a:b,'select'] = False
 
 
 
