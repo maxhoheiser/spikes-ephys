@@ -30,7 +30,7 @@ def create_random_start(trial_nr,iter_nr, trials_df, delta):
         random_li(numpy ar): array with random start points, (i=trial_nr, j=iter_nr)
     """
     #initialize complete dataframe
-    random_li = np.zeros(shape=(xtrial_nr,iter_nr),dtype=int)
+    random_li = np.zeros(shape=(trial_nr,iter_nr),dtype=int)
     #iterate over trials
     for index, row in trials_df.iterrows():
         #generate iteration x random event from trial range
@@ -102,7 +102,7 @@ def bin_trial_spike_times(input_ar,nr_bins):
 
 
 # class ###################################################################################################################
-class SpikesStatAnalysis():
+class SpikesSDA():
     def __init__(self, spikes_obj):
         self.session = spikes_obj.session
         self.folder = spikes_obj.folder
@@ -115,7 +115,7 @@ class SpikesStatAnalysis():
         self.spikes_df = spikes_obj.spikes_df
         self.clusters_df = spikes_obj.clusters_df
         
-        self.spikes_per_trial_ar = spikes_obj.spikes_per_trial_ar()
+        self.spikes_per_trial_ar = spikes_obj.spikes_per_trial_ar
 
         #self.randomized_bins_ar = self.get_randomized_samples(200, 1000)
 

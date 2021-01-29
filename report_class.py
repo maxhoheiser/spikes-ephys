@@ -29,7 +29,7 @@ class SpikesReport():
         self.spikes_df = spikes_obj.spikes_df
         self.clusters_df = spikes_obj.clusters_df
         
-        self.spikes_per_trial_ar = spikes_obj.spikes_per_trial_ar()
+        self.spikes_per_trial_ar = spikes_obj.spikes_per_trial_ar
 
         #self.randomized_bins_ar = self.get_randomized_samples(200, 1000)
 
