@@ -15,9 +15,9 @@ from pylatex.utils import italic, NoEscape
 
 # numba helper functions
 from numba import njit
-@njit()
 
-def create_random_start(trial_nr,iter_nr, trials_df, delta):
+@njit()
+def create_random_start(trial_nr,iter_nr, trials_ar, delta):
     """get random event within trial
 
     Args:
@@ -30,11 +30,10 @@ def create_random_start(trial_nr,iter_nr, trials_df, delta):
         random_li(numpy ar): array with random start points, (i=trial_nr, j=iter_nr)
     """
     #initialize complete dataframe
-    random_li = np.zeros(shape=(trial_nr,iter_nr),dtype=int)
+    random_li = np.zeros(shape=(trial_nr,iter_nr))
     #iterate over trials
-    for index, row in trials_df.iterrows():
-        #generate iteration x random event from trial range
-        random_li[index,:]=(np.random.randint((row['start']+delta),(row['end']-delta), size=(iter_nr)) )-row['start']
+    for i in range(trial_nr):
+        random_li[i,:]=(np.random.randint((trials_ar[i,0]+delta),(trials_ar[i,1]-delta), size=(iter_nr)) )-trials_ar[i,0]
     return random_li
 
 # get spikes for event aligned windows =============================
@@ -57,7 +56,7 @@ def get_spikes_in_window_all_trials_singlevent(spikes_ar_all, event_ar, delta):
     """get all spikes that fall in window of specific event for all trials
 
     Args:
-        spikes_ar_all (np ar): array of arrays of spike times for each trial
+        spikes_ar_all (np ar): array of all spike times for cluster
         event_ar (np ar): array of event times for each trial
         delta (float): 1/2 window width in sampling points
 
@@ -65,13 +64,13 @@ def get_spikes_in_window_all_trials_singlevent(spikes_ar_all, event_ar, delta):
         list: list of arrays with all spike times that fall in window for each trial
     """
     spikes_li_all = list()
-    for trial in range(spikes_ar_all.shape[0]):
-        spikes_li_all.append(get_spikes_in_window_per_trial(spikes_ar_all[trial].values, event_ar[trial], delta))
+    for trial in range(event_ar.shape[0]):
+        spikes_li_all.append(get_spikes_in_window_per_trial(spikes_ar_all.values, event_ar[trial], delta))
     return spikes_li_all
 
 # random events
 
-def get_spikes_in_window_per_trial_all_randrang(data_ar, range_ar):
+def get_spikes_in_window_per_trial_all_randrang(data_ar, range_ar, delta):
     """get all spikes that fall in all random generated windows for specific trial
 
     Args:
@@ -92,7 +91,7 @@ def get_spikes_in_window_per_trial_all_randrang(data_ar, range_ar):
     return results_li#, binned_li#, range_li #np.array(results_li,dtype=object)
 
 
-def get_spikes_in_window_all_trial_all_randrang(spikes_per_trial_df, random_ar):
+def get_spikes_in_window_all_trial_all_randrang(spikes_per_trial_df, random_ar, delta):
     """get spikes for all trials and iterations
 
     Args:
@@ -106,7 +105,7 @@ def get_spikes_in_window_all_trial_all_randrang(spikes_per_trial_df, random_ar):
     #binnes_li = list()
     for i in range(spikes_per_trial_df.shape[0]):
         #results_li, binned_li = get_random_range_spikes(spikes_per_trial_df[i].values, random_ar[i])
-        spiketimes_li.append(get_spikes_in_window_per_trial_all_randrang(spikes_per_trial_df[i].values, random_ar[i]))
+        spiketimes_li.append(get_spikes_in_window_per_trial_all_randrang(spikes_per_trial_df[i].values, random_ar[i], delta))
         #binnes_li.append(binned_li)
     return spiketimes_li#, binnes_li
 
@@ -151,7 +150,8 @@ def bin_trial_spike_times_single_cluster(input_ar,nr_bins):
         data_ar[:,it]=(np.histogram(np.concatenate(input_ar[:,it]).ravel(),bins=nr_bins))[0]
     return data_ar
 
-# get spikes for event aligned windows =============================
+
+
 
 # class ###################################################################################################################
 class SpikesSDA():
@@ -168,12 +168,21 @@ class SpikesSDA():
         self.clusters_df = spikes_obj.clusters_df
         
         self.spikes_per_trial_ar = spikes_obj.spikes_per_trial_ar
+        self.spikes_per_cluster_ar = spikes_obj.spikes_per_cluster_ar
 
         #self.randomized_bins_ar = self.get_randomized_samples(200, 1000)
 
 
 
     def get_cluster_name_from_neuron_idx(self, neuron_idx):
+        """get the name of the good cluster (global cluster name) from neuron index (position in good cluster)
+
+        Args:
+            neuron_idx (int): [description]
+            
+        Returns:
+            int: [description]
+        """
         cluster_name = self.clusters_df.loc[self.clusters_df['group']=='good'].iloc[neuron_idx].name
         return cluster_name
 
@@ -191,15 +200,22 @@ class SpikesSDA():
 ##STAT ANALYSIS###############################################################################################################
 
  #Helper Functions statistical data analysis =================================================================================
-    def get_randomized_windows(self, window, iterations):
-        """generate data array with random selected events and spike counts for each window around event
+    def get_bootstrap_all_clusters(self, window, iterations,bins, event):
+        """generate data for bootstrap of distribuiton of spikes, to compare event aligend binned spike data
+           with iterations time random sampled bins
 
         Args:
-            window (int): 1/2 window widt in milli seconds
-            iterations (int): number of random iterations
+            window (int): 1/2 window width of binned range around event in milli seconds
+            iterations (int): number of random samples for each trial
+            bins (int): number of bins of each window
+            event (str): event to align as comparison
+
         Returns:
-            np ar: array with spike counts for i=clusters, j=trials, k=iterations, data = spike times
+            [type]: [description]
         """
+        
+        delta = window*20
+        
         # initialize data array 
         #y=clusters
         y=self.spikes_per_trial_ar.shape[0]
@@ -208,27 +224,47 @@ class SpikesSDA():
         #z=random_events 
         z=iterations
 
-        # translate window from milli seconds to clicks
-        delta = window*20
-
         # create zeros data array dtype object
-        data_ar = np.zeros(shape=(y,x,z),dtype=object)
-
+        spiketimes_data_ar = np.zeros(shape=(y,x,z),dtype=object)
+        
+        # reward alignded database
+        reward_aligned_ar = np.zeros(y,dtype=object)
+        
         #### create random start point array for all trials 
-        # random ar
+        #get trial data
+        trial_ar = np.zeros((x,2))
+        trial_ar[:,0]=self.selected_trials_df['start']
+        trial_ar[:,1]=self.selected_trials_df['end']
+        #
         random_ar = np.zeros(shape=(x,z),dtype=int)
-        random_ar = create_random_start(x,z, self.selected_trials_df, delta)
+        random_ar = create_random_start(x,z, trial_ar, delta)
 
         #get spikes for all clusters
         for i in range(y):
-            data_ar[i,:,:]=get_random_range_spikes_all_trials(self.spikes_per_trial_ar[i], random_ar)
+            spiketimes_data_ar[i,:,:] =get_spikes_in_window_all_trial_all_randrang(self.spikes_per_trial_ar[i], random_ar, delta)
 
-        return data_ar
+            cluster_name = self.get_cluster_name_from_neuron_idx(i)
+            spikes = self.spikes_df[self.spikes_df.loc[:]['cluster'] == cluster_name]['spike_times']
+            trials = self.selected_trials_df[event]
+            reward_aligned_ar[i]=get_spikes_in_window_all_trials_singlevent(spikes,trials,delta)
+
+        #create flattend spike times for each iteration
+        binned = bin_trial_spike_times_all_cluster(spiketimes_data_ar,bins)
+
+        # calulate mean array
+        mean_ar = np.mean(binned, axis=2)
+        #mean_cl = np.mean(mean_ar, axis=1)
+        percentil_ar=np.percentile(binned, [0.5,25,50,75,99.5], axis=2)
+        
+        return spiketimes_data_ar, reward_aligned_ar, binned, mean_ar, percentil_ar
+
+
+
 
 
 
  #Ploting statistical analysis ============================================================================================
-    def surf_plt(self, binned_ar, cluster):
+    def plt_surf_single_cluster(self, binned_ar):
         """3D surface + color map plot a surface of bin_counts for given binned data arrayo
         ver bins (x=bin, y=iterations, z=bin_count)
 
@@ -246,14 +282,14 @@ class SpikesSDA():
         # x = bins
         # y = iteration
         # z = spikes in bin
-        _,x,y=binned_ar.shape
+        x,y=binned_ar.shape
 
         # get data.
         X = np.arange(0,x)
         Y = np.arange(0,y)
         X, Y = np.meshgrid(X, Y)
         # actual data
-        Z = binned_ar[cluster,:,:].T
+        Z = binned_ar[:,:].T
 
         # Plot the surface.
         surf = ax.plot_surface(Y, X, Z, cmap=cm.coolwarm,linewidth=0, antialiased=False)
@@ -263,7 +299,7 @@ class SpikesSDA():
 
         return fig, ax
 
-    def test_plot_raw_spikes(self, spikes_ar, binned_ar, cluster, bins):
+    def plt_test_plot_raw_spikes(self, spikes_ar, binned_ar, cluster, bins):
         """comparison of histograms generated from already binned data 
             and raw spikes for all trials all iterations
             for testing purposis
@@ -284,9 +320,9 @@ class SpikesSDA():
             # create histogram from raw spikes left
             ax[0].hist(np.concatenate(spikes_ar[cluster,:,i]).ravel(),bins=bins)
             # create bar plot from already binned data
-            ax[1].bar(np.arange(0,bins),binned[cluster,:,i],width=1.0,label=f"itr:{i}")
+            ax[1].bar(np.arange(0,bins),binned_ar[cluster,:,i],width=1.0,label=f"itr:{i}")
         #fix aspect ratio
-        [fixed_aspect_ratio(0.8,a) for a in ax]
+        [self.fixed_aspect_ratio(0.8,a) for a in ax]
         # create comon legend
         lines_labels = [ax.get_legend_handles_labels() for ax in fig.axes]
         lines, labels = [sum(lol, []) for lol in zip(*lines_labels)]
@@ -307,5 +343,39 @@ class SpikesSDA():
         yrange = yvals[1]-yvals[0]
         ax.set_aspect(ratio*(xrange/yrange), adjustable='box')
 
+    def plt_compare_random_fixed(self,cluster,window,bins,reward_aligned_ar,mean_ar,percentil_ar):
+        """plot summary of randomized bin confidenz interval and event aligned binned spike counts
 
+        Args:
+            cluster (int): neuron index
+            delta (int): 1/2 window width in samping points
+            bins (int): number of binns
+            reward_aligned_ar (np ar): spike times for windows event aligned
+            mean_ar (np ar): mean spike cont per bin for all random iterations
+            percentil_ar (np ar): [0.5,25,50,75,99.5] percentiels spike cont per bin for all random iterations
+
+        Returns:
+            [type]: [description]
+        """
+        delta=window*20
+        x=np.linspace(-delta,+delta,bins)
+        
+        fig,ax = plt.subplots()
+
+        binned_reward = np.histogram(np.concatenate(reward_aligned_ar[cluster]).ravel(), bins=bins)[0]
+        ax.plot(x,binned_reward, linewidth=3, alpha=1, label="reward aligned ")
+
+        # 
+        ax.axvline(x=0,linewidth=1, color='r', label="reward")
+        ax.plot(x,mean_ar[cluster], color="black", label="mean")
+
+        # plot +-95%
+        #ax.fill_between(x, np.zeros(bins), percentil_ar[4,:], color='b', alpha=.3, label="0.5th% to 99.5th%")
+        ax.fill_between(x, percentil_ar[0,cluster,:], percentil_ar[4,cluster,:], color='b', alpha=0.3, label="0.5th% to 99.5th%")
+
+        lines_labels = [ax.get_legend_handles_labels() for ax in fig.axes]
+        lines, labels = [sum(lol, []) for lol in zip(*lines_labels)]
+        fig.legend(lines, labels,loc=1,ncol=6)
+        
+        return fig,ax
 
