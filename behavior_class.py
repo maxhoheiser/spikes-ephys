@@ -19,7 +19,7 @@ class BehaviorAnalysis():
         self.gamble_side = sync_obj.gamble_side
         self.deselect_trials = deselect_trials
 
-        self.trials_df = sync_obj.trials_df
+        self.all_trials_df = sync_obj.all_trials_df
         self.good_trials_df = sync_obj.good_trials_df
 
         for a,b in deselect_trials:
@@ -28,7 +28,8 @@ class BehaviorAnalysis():
             else:
                 self.good_trials_df.loc[a:b,'select'] = False
 
-
+        self.selected_trials_df = self.good_trials_df.loc[self.good_trials_df['select'],:]
+        self.selected_trials_df.reset_index(drop=True,inplace=True)
 
     def get_wheel_and_resp(self):
         wheel = []

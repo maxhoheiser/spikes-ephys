@@ -31,7 +31,7 @@ class SyncPhenosys():
         self.csv = self.load_csv()
         self.rows_missing_ttl = rows_missing_ttl
         self.combined_df = self.combine_dataframes()
-        self.trials_df, self.good_trials_df =  self.get_trials()
+        self.all_trials_df, self.good_trials_df =  self.get_trials()
 
 
  # Load & manipulate Intern binary Data ====================================================================
@@ -420,6 +420,8 @@ class SyncPhenosys():
 
             trials_df.loc[trials_df.shape[0] + 1] = new_row
 
+        # convert 20khz sampling point length to ms length
+        trials_df['length_ms']=trials_df['length']*0.05
 
         # set index_all_trials as dataframe index
         trials_df.set_index('index_all_trials', inplace=True)
@@ -438,9 +440,13 @@ class SyncPhenosys():
         trials_df['good']=False
         trials_df.loc[trials_df['index_good_trials'].notna(),'good']=True
 
+        # change to numeric
+        trials_df[['start','cue','sound','openloop','reward','iti','end','probability','length']] = trials_df[['start','cue','sound','openloop','reward','iti','end','probability','length']].apply(pd.to_numeric)
+
         # create good trials dataframe
         good_trials_df = trials_df.loc[trials_df['good'],:]
         good_trials_df.set_index('index_good_trials',inplace=True)
+
 
 
         return (trials_df, good_trials_df)
@@ -453,13 +459,3 @@ class SyncPhenosys():
 
 
 
-
-mac_folder = "/Users/max/Google Drive/3 Projekte/Masterarbeit Laborarbeit Neuroscience/1 Data Analysis"
-
-
-session = 'JG14_190621'
-folder = mac_folder + r"/" + session
-rows_missing_ttl = [1900,1931,1996,2058,2127]
-deselect_trials = [(0,6),(215,'end')]
-
-sync_obj = SyncPhenosys(session, folder, 7, 1, rows_missing_ttl) 
