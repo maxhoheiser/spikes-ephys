@@ -37,8 +37,41 @@ def create_random_start(trial_nr,iter_nr, trials_df, delta):
         random_li[index,:]=(np.random.randint((row['start']+delta),(row['end']-delta), size=(iter_nr)) )-row['start']
     return random_li
 
+# get spikes for event aligned windows =============================
 
-def get_random_range_spikes(data_ar, range_ar):
+def get_spikes_in_window_per_trial(data_ar, i, delta):
+    """get all spikes that fall into window(+-delta) around event i 
+
+    Args:
+        data_ar (np ar): spike times
+        i (float): event time
+        delta (float): 1/2 window width in sampling points
+
+    Returns:
+        np ar: array with spike times that are in window
+    """
+    return (data_ar[( (data_ar>=(i-delta)) & (data_ar<=(i+delta)) )]-(i-delta))
+
+# fixed event
+def get_spikes_in_window_all_trials_singlevent(spikes_ar_all, event_ar, delta):
+    """get all spikes that fall in window of specific event for all trials
+
+    Args:
+        spikes_ar_all (np ar): array of arrays of spike times for each trial
+        event_ar (np ar): array of event times for each trial
+        delta (float): 1/2 window width in sampling points
+
+    Returns:
+        list: list of arrays with all spike times that fall in window for each trial
+    """
+    spikes_li_all = list()
+    for trial in range(spikes_ar_all.shape[0]):
+        spikes_li_all.append(get_spikes_in_window_per_trial(spikes_ar_all[trial].values, event_ar[trial], delta))
+    return spikes_li_all
+
+# random events
+
+def get_spikes_in_window_per_trial_all_randrang(data_ar, range_ar):
     """get all spikes that fall in all random generated windows for specific trial
 
     Args:
@@ -51,16 +84,15 @@ def get_random_range_spikes(data_ar, range_ar):
     results_li = list()
     #binned_li = list()
     #range_li = list()
-    # iterate over random evets
     for i in range_ar:
         #range_li.append(((i-delta),(i+delta)))
-        # get spikes within random event
-        results_li.append(data_ar[( (data_ar>=(i-delta)) & (data_ar<=(i+delta)) )]-(i-delta))
+        #results_li.append(data_ar[( (data_ar>=(i-delta)) & (data_ar<=(i+delta)) )]-(i-delta))
+        results_li.append(get_spikes_in_window_per_trial(data_ar, i, delta))
         #binned_li.append( (np.histogram(results_li[-1], bins=50, range=[(i-delta),(i+delta)]))[0] )
     return results_li#, binned_li#, range_li #np.array(results_li,dtype=object)
 
 
-def get_random_range_spikes_all_trials(spikes_per_trial_df, random_ar):
+def get_spikes_in_window_all_trial_all_randrang(spikes_per_trial_df, random_ar):
     """get spikes for all trials and iterations
 
     Args:
@@ -74,13 +106,13 @@ def get_random_range_spikes_all_trials(spikes_per_trial_df, random_ar):
     #binnes_li = list()
     for i in range(spikes_per_trial_df.shape[0]):
         #results_li, binned_li = get_random_range_spikes(spikes_per_trial_df[i].values, random_ar[i])
-        spiketimes_li.append(get_random_range_spikes(spikes_per_trial_df[i].values, random_ar[i]))
+        spiketimes_li.append(get_spikes_in_window_per_trial_all_randrang(spikes_per_trial_df[i].values, random_ar[i]))
         #binnes_li.append(binned_li)
     return spiketimes_li#, binnes_li
 
 
-def bin_trial_spike_times(input_ar,nr_bins):
-    """binn randm windows from all trials all iterations over complete trial
+def bin_trial_spike_times_all_cluster(input_ar,nr_bins):
+    """binn randm windows from all clusters, all trials all iterations over complete trial
 
     Args:
         input_ar (np ar): spikes per random event for all clusters, all trials, all iterations
@@ -100,6 +132,26 @@ def bin_trial_spike_times(input_ar,nr_bins):
             data_ar[cl,:,it]=(np.histogram(np.concatenate(input_ar[cl,:,it]).ravel(),bins=nr_bins))[0]
     return data_ar
 
+def bin_trial_spike_times_single_cluster(input_ar,nr_bins):
+    """binn randm windows from single clusters, all trials all iterations over complete trial
+
+    Args:
+        input_ar (np ar): spikes per random event for single clusters, all trials, all iterations
+        nr_bins (int): number to bin trial
+
+    Returns:
+        np ar: array of binns (i=bin,j=iteration, data=bin count)
+    """
+    iterations=input_ar.shape[1]
+    # y = cluster index
+    # x = bin number 1 to 50
+    # z = random iteration 1 to 1000
+    data_ar=np.zeros(shape=(nr_bins,iterations),dtype=int)
+    for it in range(iterations):
+        data_ar[:,it]=(np.histogram(np.concatenate(input_ar[:,it]).ravel(),bins=nr_bins))[0]
+    return data_ar
+
+# get spikes for event aligned windows =============================
 
 # class ###################################################################################################################
 class SpikesSDA():
