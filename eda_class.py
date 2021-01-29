@@ -1,3 +1,7 @@
+# To do - test plotting of all fiugres
+# pass in fig, ax to save fig function
+
+
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -9,110 +13,21 @@ from mpl_toolkits.mplot3d import Axes3D
 from matplotlib import cm
 from matplotlib.ticker import LinearLocator, FormatStrFormatter
 
-# for pylatex
-from pylatex import Document, Section, Subsection, Command, Package, NewPage, LongTabu, Tabular
-from pylatex.utils import italic, NoEscape
-
-# numba helper functions
-from numba import njit
-@njit()
-
-def create_random_start(trial_nr,iter_nr, trials_df, delta):
-    """get random event within trial
-
-    Args:
-        trial_nr (int): number of trials
-        iter_nr (int): number of iterations
-        trials_df (numpy ar): dataframe from spikes class with all trials
-        delta (float): window = 2*delta
-
-    Returns:
-        random_li(numpy ar): array with random start points, (i=trial_nr, j=iter_nr)
-    """
-    #initialize complete dataframe
-    random_li = np.zeros(shape=(xtrial_nr,iter_nr),dtype=int)
-    #iterate over trials
-    for index, row in trials_df.iterrows():
-        #generate iteration x random event from trial range
-        random_li[index,:]=(np.random.randint((row['start']+delta),(row['end']-delta), size=(iter_nr)) )-row['start']
-    return random_li
-
-
-def get_random_range_spikes(data_ar, range_ar):
-    """get all spikes that fall in all random generated windows for specific trial
-
-    Args:
-        data_ar (numpy ar): spikes_per_trial_ar[cluster,trial,:] from spikes class
-        range_ar (numpy ar): random_li output from create_random_start function
-
-    Returns:
-        list: list of arrays with spikes for all iterations for specific trial
-    """
-    results_li = list()
-    #binned_li = list()
-    #range_li = list()
-    # iterate over random evets
-    for i in range_ar:
-        #range_li.append(((i-delta),(i+delta)))
-        # get spikes within random event
-        results_li.append(data_ar[( (data_ar>=(i-delta)) & (data_ar<=(i+delta)) )]-(i-delta))
-        #binned_li.append( (np.histogram(results_li[-1], bins=50, range=[(i-delta),(i+delta)]))[0] )
-    return results_li#, binned_li#, range_li #np.array(results_li,dtype=object)
-
-
-def get_random_range_spikes_all_trials(spikes_per_trial_df, random_ar):
-    """get spikes for all trials and iterations
-
-    Args:
-        spikes_per_trial_df (np ar): spikes class matrix from
-        random_ar (np ar): random events
-
-    Returns:
-        li: list of lists with all spikes for all trials and all iterations
-    """ 
-    spiketimes_li = list()
-    #binnes_li = list()
-    for i in range(spikes_per_trial_df.shape[0]):
-        #results_li, binned_li = get_random_range_spikes(spikes_per_trial_df[i].values, random_ar[i])
-        spiketimes_li.append(get_random_range_spikes(spikes_per_trial_df[i].values, random_ar[i]))
-        #binnes_li.append(binned_li)
-    return spiketimes_li#, binnes_li
-
-
-def bin_trial_spike_times(input_ar,nr_bins):
-    """binn randm windows from all trials all iterations over complete trial
-
-    Args:
-        input_ar (np ar): spikes per random event for all clusters, all trials, all iterations
-        nr_bins (int): number to bin trial
-
-    Returns:
-        np ar: array of binns (i=cluster,j=bin,k=iteration, data=bin count)
-    """
-    cluster=input_ar.shape[0]
-    iterations=input_ar.shape[2]
-    # y = cluster index
-    # x = bin number 1 to 50
-    # z = random iteration 1 to 1000
-    data_ar=np.zeros(shape=(cluster,nr_bins,iterations),dtype=int)
-    for cl in range(cluster):
-        for it in range(iterations):
-            data_ar[cl,:,it]=(np.histogram(np.concatenate(input_ar[cl,:,it]).ravel(),bins=nr_bins))[0]
-    return data_ar
 
 
 # class ###################################################################################################################
-class SpikeAnalysis():
+class SpikesEDA():
     def __init__(self, behavior_obj, skip_clusters=[]):
         self.session = behavior_obj.session
         self.folder = behavior_obj.folder
+        self.gamble_side = behavior_obj.gamble_side
+
         self.all_trials_df = behavior_obj.all_trials_df
         self.good_trials_df = behavior_obj.good_trials_df
         self.selected_trials_df = behavior_obj.selected_trials_df
         self.skip_clusters = skip_clusters
         self.spikes_df, self.clusters_df = self.load_files()
-        self.session = behavior_obj.session
-        self.gamble_side = behavior_obj.gamble_side
+        
         self.spikes_per_trial_ar = self.gen_spike_per_trial_matrix()
         self.spikes_per_cluster_ar = self.gen_spike_per_cluster_matrix()
         #self.randomized_bins_ar = self.get_randomized_samples(200, 1000)
@@ -204,7 +119,7 @@ class SpikeAnalysis():
         return ar 
 
     # get all spikes for specified clusters
-    def get_spikes_for_cluster(trials_df, cluster):
+    def get_spikes_for_cluster(self, trials_df, cluster):
         '''
         params: trials_df = array with all trials, start and stop times
                 sikes_times = df with all the spike times indext by cluster
@@ -216,7 +131,7 @@ class SpikeAnalysis():
             # create empty data frame indext by trials, but only one which have select = true
             start = trials_df.loc[row, 'start']
             stop = trials_df.loc[row, 'end']
-            df1 = pd.DataFrame({row:get_spikes_for_trial(cluster, start, stop)}, dtype="Int64")
+            df1 = pd.DataFrame({row:self.get_spikes_for_trial(cluster, start, stop)}, dtype="Int64")
             df = pd.concat([df,df1.dropna()], axis=1)
         df = df.T
         df.index.name = 'Trial'
@@ -252,10 +167,10 @@ class SpikeAnalysis():
         df = pd.DataFrame({'count':(last_idx - first_idx), 'start index':first_idx, 'bin end time':bin_ends ,'last spike in bin':cluster.iloc[last_idx-1].values})
         df.index.name = 'bin'
         # add trial indexes
-        bins = self.trials_df['end'].values
+        bins = self.selected_trials_df['end'].values
         bins = np.insert(bins, 0, 0)
         # labels
-        labels = self.trials_df.index.values
+        labels = self.selected_trials_df.index.values
         # add trial index
         df['trial'] = pd.cut(df['bin end time'], bins, labels=labels, right=True, include_lowest=True)
         df.set_index('trial', append=True, inplace=True)
@@ -263,7 +178,7 @@ class SpikeAnalysis():
         return df
 
     #  Compute a vector of ISIs for a single neuron given spike times.
-    def compute_single_neuron_isis(spike_times, neuron_idx):
+    def compute_single_neuron_isis(self, spike_times, neuron_idx):
         """
         Compute a vector of ISIs for a single neuron given spike times.
         Args:
@@ -275,7 +190,7 @@ class SpikeAnalysis():
             isis (1D array): Duration of time between each spike from one neuron.
         """
         # Extract the spike times for the specified neuron
-        single_neuron_spikes = spike_times.loc[neuron_idx]['spikes']
+        single_neuron_spikes = self.spike_times.loc[neuron_idx]['spikes']
 
         # Compute the ISIs for this set of spikes
         # Hint: the function np.diff computes discrete differences along an array
@@ -1087,318 +1002,34 @@ class SpikeAnalysis():
 
     # firing frequency binned ==========
 
-##STAT ANALYSIS###############################################################################################################
 
- #Helper Functions statistical data analysis =================================================================================
-    def get_randomized_samples(self, window, iterations):
-        """generate data array with random selected events and spike counts for each window around event
+# Save all figures ===================================================================================================
 
-        Args:
-            window (int): 1/2 window widt in milli seconds
-            iterations (int): number of random iterations
-        Returns:
-            np ar: array with spike counts for i=clusters, j=trials, k=iterations, data = spike times
-        """
-        # initialize data array 
-        #y=clusters
-        y=self.spikes_per_trial_ar.shape[0]
-        #x=trials
-        x=self.spikes_per_trial_ar.shape[1]
-        #z=random_events 
-        z=iterations
-
-        # translate window from milli seconds to clicks
-        delta = window*20
-
-        # create zeros data array dtype object
-        data_ar = np.zeros(shape=(y,x,z),dtype=object)
-
-        #### create random start point array for all trials 
-        # random ar
-        random_ar = np.zeros(shape=(x,z),dtype=int)
-        random_ar = create_random_start(x,z, self.selected_trials_df, delta)
-
-        #get spikes for all clusters
-        for i in range(y):
-            data_ar[i,:,:]=get_random_range_spikes_all_trials(self.spikes_per_trial_ar[i], random_ar)
-
-        return data_ar
-
-
-
- #Ploting statistical analysis ============================================================================================
-    def surf_plt(self, binned_ar, cluster):
-        """3D surface + color map plot a surface of bin_counts for given binned data arrayo
-        ver bins (x=bin, y=iterations, z=bin_count)
-
-        Args:
-            binned_ar (np ar): binned data array for random spike windows selected from all trials
-            cluster (int): cluster to plot for
-
-        Returns:
-            fix, ax: 
-        """
-        fig = plt.figure()
-        ax = fig.gca(projection='3d')
-
-        # get dimension
-        # x = bins
-        # y = iteration
-        # z = spikes in bin
-        _,x,y=binned_ar.shape
-
-        # get data.
-        X = np.arange(0,x)
-        Y = np.arange(0,y)
-        X, Y = np.meshgrid(X, Y)
-        # actual data
-        Z = binned_ar[cluster,:,:].T
-
-        # Plot the surface.
-        surf = ax.plot_surface(Y, X, Z, cmap=cm.coolwarm,linewidth=0, antialiased=False)
-
-        # Add a color bar which maps values to colors.
-        fig.colorbar(surf, shrink=0.5, aspect=5)
-
-        return fig, ax
-
-    def test_plot_raw_spikes(self, spikes_ar, binned_ar, cluster, bins):
-        """comparison of histograms generated from already binned data 
-            and raw spikes for all trials all iterations
-            for testing purposis
-
-        Args:
-            spikes_ar (np ar): raw spikes for all clusters, trials, and iterations (i=cluster,j=trial,k=iteration,data=np.arry with spike times)
-            binned_ar ([type]): already binned data (i=cluster, j=bins, k=iterations, data=count of spikes per bin)
-            cluster (int): cluster to plot
-            bins (int): number of bins
-
-        Returns:
-            fix, ax:
-        """
-        # create suplots left and right 
-        fig, ax = plt.subplots(nrows=1, ncols=2, sharey=True, gridspec_kw={'wspace': 0})
-        # iterate over some of the random iterations
-        for i in [0,1,5,10,100,500]:
-            # create histogram from raw spikes left
-            ax[0].hist(np.concatenate(spikes_ar[cluster,:,i]).ravel(),bins=bins)
-            # create bar plot from already binned data
-            ax[1].bar(np.arange(0,bins),binned[cluster,:,i],width=1.0,label=f"itr:{i}")
-        #fix aspect ratio
-        [fixed_aspect_ratio(0.8,a) for a in ax]
-        # create comon legend
-        lines_labels = [ax.get_legend_handles_labels() for ax in fig.axes]
-        lines, labels = [sum(lol, []) for lol in zip(*lines_labels)]
-        fig.legend(lines, labels,loc=8,ncol=6)
-        return fig, ax
-
-    def fixed_aspect_ratio(self,ratio,ax):
-        """Set a fixed aspect ratio on matplotlib plots 
-        regardless of axis units
-
-        Args:
-            ratio (foat): x,y ratio
-            ax (plt.axs): axis to ratioalize
-        """
-        xvals,yvals = ax.get_xlim(),ax.get_ylim()
-
-        xrange = xvals[1]-xvals[0]
-        yrange = yvals[1]-yvals[0]
-        ax.set_aspect(ratio*(xrange/yrange), adjustable='box')
-
-
-
-# Save all & Create Report ===================================================================================================
-    # save images of spike train and histogram plot for all good clusters for all reward event
-    def save_plt_spike_train_hist_reward(self, window, update=False):
-        """
-        def:    saves the spike train for all trials stacked on each other for event +/- window in seconds
-                and the histogram for the count of spikes over all trials
-                for all clusters
-        params: window = delta window in ms
-        return:
-        """
-        # batch plot for single cluster all reward configurations
-        # gamble side = right -> reward = 5, no reward = 6
-        # reward
-        sel_tr_rw_all = self.trials_df.loc[ (self.trials_df['select'] == True) & ( (self.trials_df['event']==5) | (self.trials_df['event']==7) ) ][:]
-        sel_tr_rw_gambl = self.trials_df.loc[ (self.trials_df['select'] == True) & ( (self.trials_df['event']==5) ) ][:]
-        sel_tr_rw_save = self.trials_df.loc[ (self.trials_df['select'] == True) & ( (self.trials_df['event']==7) ) ][:]
-        # no reward
-        sel_tr_norw_all = self.trials_df.loc[ (self.trials_df['select'] == True) & ( (self.trials_df['event']==8) | (self.trials_df['event']==6) ) ][:]
-        sel_tr_norw_gambl = self.trials_df.loc[ (self.trials_df['select'] == True) & ( (self.trials_df['event']==6) ) ][:]
-        sel_tr_norw_save = self.trials_df.loc[ (self.trials_df['select'] == True) & ( (self.trials_df['event']==8) ) ][:]
-        # title
-        tlt_rw_all = ("reward (both sides)")
-        tlt_rw_gambl = ("reward gambl side")
-        tlt_rw_save = ("reward save side")
-        tlt_norw_all = ("no-reward (both sides)")
-        tlt_norw_gambl = ("no-reward gambl side")
-        tlt_norw_save = ("no-reward save side")
-        # file name
-        fln_rw_all = ("reward")
-        fln_rw_gambl = ("reward-gambl")
-        fln_rw_save = ("reward-save")
-        fln_norw_all = ("no-reward")
-        fln_norw_gambl = ("no-reward-gambl")
-        fln_norw_save = ("no-reward-save")
-        # touples (selected trials dataframe, name, file name ending)
-        rw_all = (sel_tr_rw_all, tlt_rw_all, fln_rw_all)
-        rw_gambl = (sel_tr_rw_gambl, tlt_rw_gambl, fln_rw_gambl)
-        rw_save = (sel_tr_rw_save, tlt_rw_save, fln_rw_save)
-        norw_all = (sel_tr_norw_all, tlt_norw_all, fln_norw_all)
-        norw_gambl = (sel_tr_norw_gambl, tlt_norw_gambl, fln_norw_gambl)
-        norw_save = (sel_tr_norw_save, tlt_norw_save, fln_norw_save)
-        # pack all to list
-        plots = [rw_all, rw_gambl, rw_save, norw_all, norw_gambl, norw_save]
-
-        #=========================================================================================================
-
-        # load path to pictures for os
-        if platform.system() == 'Linux':
-            path = (self.folder + r"/figures/spikes/spike-train-hist-event" )
-        elif platform.system() == 'Windows':
-            path = (self.folder + r"\figures\spikes\spike-train-hist-event" )
-        # check if folder exists if not create
-        if not os.path.isdir(path):
-            os.makedirs(path)
-
-        # iterate over all clusters
-        for cluster in self.clusters_df.loc[self.clusters_df['group']=='good'].index:
-            # iterate over all different reward events
-            for plot in plots:
-                # unpack touples
-                selected_trials, title, file_name = plot
-                # create filename
-                if platform.system() == 'Linux':
-                    name = (r"/cluster-" + str(cluster) + "-" + file_name + ".png")
-                elif platform.system() == 'Windows':
-                    name = (r"\cluster-" + str(cluster) + "-" + file_name + ".png")
-                file = (path + name)
-                # create subplot
-                fig, axs = plt.subplots(nrows=2, ncols=1, sharex=True, gridspec_kw={'hspace': 0})
-                # plot figure
-                fig, axs = self.plt_spike_train_hist(cluster, selected_trials, 'reward', window, fig, axs, title)
-                # save figure
-                plt.savefig(file, dpi=300)
-                plt.close(fig)
-
-                #print infos
-                print(f"\tplot {title} finished")
-            print(f"cluster {cluster} finished")
-        print(f"\nall plots finished")
-
-    # save images of spike train and histogram and bar plot for all good clusters for all reward events
-    def save_plt_spike_train_hist_bar_reward(self, window, update=False):
-        """
-        def:    saves the spike train for all trials stacked on each other for event +/- window in seconds
-                and the histogram for the count of spikes over all trials
-                for all clusters
-        params: window = delta window in ms
-        return:
-        """
-        # batch plot for single cluster all reward configurations
-        # gamble side = right -> reward = 5, no reward = 6
-        # reward
-        sel_tr_rw_all = self.trials_df.loc[ (self.trials_df['select'] == True) & ( (self.trials_df['event']==5) | (self.trials_df['event']==7) ) ][:]
-        sel_tr_rw_gambl = self.trials_df.loc[ (self.trials_df['select'] == True) & ( (self.trials_df['event']==5) ) ][:]
-        sel_tr_rw_save = self.trials_df.loc[ (self.trials_df['select'] == True) & ( (self.trials_df['event']==7) ) ][:]
-        # no reward
-        sel_tr_norw_all = self.trials_df.loc[ (self.trials_df['select'] == True) & ( (self.trials_df['event']==8) | (self.trials_df['event']==6) ) ][:]
-        sel_tr_norw_gambl = self.trials_df.loc[ (self.trials_df['select'] == True) & ( (self.trials_df['event']==6) ) ][:]
-        sel_tr_norw_save = self.trials_df.loc[ (self.trials_df['select'] == True) & ( (self.trials_df['event']==8) ) ][:]
-        # title
-        tlt_rw_all = ("reward (both sides)")
-        tlt_rw_gambl = ("reward gambl side")
-        tlt_rw_save = ("reward save side")
-        tlt_norw_all = ("no-reward (both sides)")
-        tlt_norw_gambl = ("no-reward gambl side")
-        tlt_norw_save = ("no-reward save side")
-        # file name
-        fln_rw_all = ("reward")
-        fln_rw_gambl = ("reward-gambl")
-        fln_rw_save = ("reward-save")
-        fln_norw_all = ("no-reward")
-        fln_norw_gambl = ("no-reward-gambl")
-        fln_norw_save = ("no-reward-save")
-        # touples (selected trials dataframe, name, file name ending)
-        rw_all = (sel_tr_rw_all, tlt_rw_all, fln_rw_all)
-        rw_gambl = (sel_tr_rw_gambl, tlt_rw_gambl, fln_rw_gambl)
-        rw_save = (sel_tr_rw_save, tlt_rw_save, fln_rw_save)
-        norw_all = (sel_tr_norw_all, tlt_norw_all, fln_norw_all)
-        norw_gambl = (sel_tr_norw_gambl, tlt_norw_gambl, fln_norw_gambl)
-        norw_save = (sel_tr_norw_save, tlt_norw_save, fln_norw_save)
-        # pack all to list
-        plots = [rw_all, rw_gambl, rw_save, norw_all, norw_gambl, norw_save]
-
-        #=========================================================================================================
-
-        # load path to pictures for os
-        if platform.system() == 'Linux':
-            path = (self.folder + r"/figures/spikes/spike-train-hist-bin-event" )
-        elif platform.system() == 'Windows':
-            path = (self.folder + r"\figures\spikes\spike-train-hist-bin-event" )
-        # check if folder exists if not create
-        if not os.path.isdir(path):
-            os.makedirs(path)
-
-        # iterate over all clusters
-        for cluster in self.clusters_df.loc[self.clusters_df['group']=='good'].index:
-            # iterate over all different reward events
-            for plot in plots:
-                # unpack touples
-                selected_trials, title, file_name = plot
-                # create filename
-                if platform.system() == 'Linux':
-                    name = (r"/cluster-" + str(cluster) + "-" + file_name + ".png")
-                elif platform.system() == 'Windows':
-                    name = (r"\cluster-" + str(cluster) + "-" + file_name + ".png")
-                file = (path + name)
-                # create subplot
-                fig = plt.figure(figsize=(6,5))
-                # create gridspecs
-                gs = fig.add_gridspec(2, 3,  hspace=0, wspace=0)
-                # create axis for hist spike train
-                ax1 = fig.add_subplot(gs[0, :2])
-                ax2 = fig.add_subplot(gs[1, :2])
-                ax2.get_shared_x_axes().join(ax1, ax2)
-                # create axis for trial hist
-                ax3 = fig.add_subplot(gs[0, 2])
-                ax3.get_shared_y_axes().join(ax1, ax3)
-                # pack axes
-                axs = (ax1, ax2, ax3)
-                # plot figure
-                fig, axs = self.plt_spike_train_hist_bar(cluster, selected_trials, 'reward', window, fig, axs, title)
-                # save figure
-                plt.savefig(file, dpi=300)
-                plt.close(fig)
-
-                #print infos
-                print(f"\tplot {title} finished")
-            print(f"cluster {cluster} finished")
-        print(f"\nall plots finished")
-
-    def save_fig(self, name, fig):
+    def save_fig(self, name):
         folder = self.folder+"/figures/all_figures"
-        fig.savefig(folder+"/"+name+'.png',dpi=200, format='png', bbox_inches='tight')
-    
-
-    def generate_plots(self):
+        plt.savefig(folder+"/"+name+'.png',dpi=200, format='png', bbox_inches='tight')
+        plt.close()
         
+
+
+    def save_all_plots(self):
+    
         #hist and fit
-        fig, ax = self.plt_trial_hist_and_fit(self.selected_trials_df.loc[:,'length'])
-        self.save_fig('hist_fit', fig)
+        plt.figure()
+        self.plt_trial_hist_and_fit(self.selected_trials_df.loc[:,'length'])
+        self.save_fig('hist_fit')
+        self.save_fig('hist_fit')
         
         # trial length
-        fig, ax = plt.subplots()
-        ax.plot(self.selected_trials_df.loc[:,'length'])
-        ax.set_ylabel('length [ms]')
-        ax.set_xlabel('trial')
-        self.save_fig('trial_length', fig)
+        plt.figure()
+        plt.plot(self.selected_trials_df.loc[:,'length'])
+        plt.ylabel('length [ms]')
+        plt.xlabel('trial')
+        self.save_fig('trial_length')
         
         # cluster histogram
-        fig, ax = self.plt_all_cluster_spikes_hist()
-        self.save_fig('cluster_hist', fig)
+        self.plt_all_cluster_spikes_hist()
+        self.save_fig('cluster_hist')
         
         # plott all isi for good clustes only focus between selected trials
         start = self.selected_trials_df.loc[0,'start']
@@ -1406,22 +1037,23 @@ class SpikeAnalysis():
 
         for cluster, row in self.clusters_df.loc[self.clusters_df['group']=='good'].iterrows():
             a = row['spikes']
-            fig, ax = self.plot_single_neuron_isis(a[np.logical_and(a>=start, a<=end)],cluster)
-            self.save_fig('isi_'+str(cluster), fig)
+            self.plot_single_neuron_isis(a[np.logical_and(a>=start, a<=end)],cluster)
+            self.save_fig('isi_'+str(cluster))
             
         # spike trains
         for cluster in self.clusters_df.loc[self.clusters_df['group']=='good'].index:
-            fig, ax = self.plt_spike_train(cluster)
-            self.save_fig('spk_train_'+str(cluster), fig)
+            self.plt_spike_train(cluster)
+            self.save_fig('spk_train_'+str(cluster))
             
         # spike train + hist all trials
         for cluster in self.clusters_df.index:
             fig, ax = self.plt_spike_train_hist_all_events(cluster, self.selected_trials_df, 'cue', 2000)
-            self.save_fig('spk_train_hist_all-events_'+str(cluster), fig)
+            self.save_fig('spk_train_hist_all-events_'+str(cluster))
         
         for cluster in self.clusters_df.index:
             fig, ax = self.plt_spike_train_hist_all_events(cluster, self.selected_trials_df, 'reward', 2000)
-            self.save_fig('spk_train_hist_all-events_reward-centered_'+str(cluster), fig)
+            self.save_fig('spk_train_hist_all-events_reward-centered_'+str(cluster))
+        
         
         # plott reward at specific trials
         
@@ -1438,162 +1070,41 @@ class SpikeAnalysis():
         selected_trials = self.selected_trials_df[(self.selected_trials_df[gamble])&(self.selected_trials_df['reward_given'])]
         for cluster in self.clusters_df.index:
             fig, ax = self.plt_spike_train_hist(cluster, selected_trials, 'reward', 2000)
-            self.save_fig('spk_train_hist_gamble_reward_'+str(cluster), fig)
+            self.save_fig('spk_train_hist_gamble_reward_'+str(cluster))
         
         # reward left
         selected_trials = self.selected_trials_df[(self.selected_trials_df[save])&(self.selected_trials_df['reward_given'])]
         for cluster in self.clusters_df.index:
             fig, ax = self.plt_spike_train_hist(cluster, selected_trials, 'reward', 2000)
-            self.save_fig('spk_train_hist_save_reward_'+str(cluster), fig)
+            self.save_fig('spk_train_hist_save_reward_'+str(cluster))
         
         # not rewarded
         selected_trials = self.selected_trials_df[(self.selected_trials_df[gamble])&(np.invert(self.selected_trials_df['reward_given']))]
         for cluster in self.clusters_df.index:
             fig, ax = self.plt_spike_train_hist(cluster, selected_trials, 'reward', 2000)
-            self.save_fig('spk_train_hist_gamble_no-reward_'+str(cluster), fig)
+            self.save_fig('spk_train_hist_gamble_no-reward_'+str(cluster))
         
         # reward left
         selected_trials = self.selected_trials_df[(self.selected_trials_df[save])&(np.invert(self.selected_trials_df['reward_given']))]
         for cluster in self.clusters_df.index:
             fig, ax = self.plt_spike_train_hist(cluster, selected_trials, 'reward', 2000)
-            self.save_fig('spk_train_hist_save_no-reward_'+str(cluster), fig)
+            self.save_fig('spk_train_hist_save_no-reward_'+str(cluster))
             
         
         # all reward
         selected_trials = self.selected_trials_df[self.selected_trials_df['reward_given']]
         for cluster in self.clusters_df.index:
             fig, ax = self.plt_spike_train_hist(cluster, selected_trials, 'reward', 2000)
-            self.save_fig('spk_train_hist_reward_'+str(cluster), fig)
+            self.save_fig('spk_train_hist_reward_'+str(cluster))
             
         # all right
         selected_trials = self.selected_trials_df[self.selected_trials_df[gamble]]
         for cluster in self.clusters_df.index:
             fig, ax = self.plt_spike_train_hist(cluster, selected_trials, 'reward', 2000)
-            self.save_fig('spk_train_hist_gamble_'+str(cluster), fig)
+            self.save_fig('spk_train_hist_gamble_'+str(cluster))
 
         # all left
         selected_trials = self.selected_trials_df[self.selected_trials_df[save]]
         for cluster in self.clusters_df.index:
             fig, ax = self.plt_spike_train_hist(cluster, selected_trials, 'reward', 2000)
-            self.save_fig('spk_train_hist_save_'+str(cluster), fig)
-
-    #============================================================================================================================
-    # generate latex report
-
-    # create latex report with all images
-    def image_box_cluster(self, file_name, cluster, width=0.4, last=False):
-        arg = (r"\parbox[c]{1em}{\includegraphics[width="+ str(width)+r"\textwidth]{"+self.folder+r"/figures/all_figures/"+file_name+r"_"+str(cluster)+r".png}}")
-        if last:
-            arg += r"\\"
-        else:
-            arg += "&"
-        return arg
-    
-    def image_box(self, file_name, width=0.4, last=False):
-        arg = (r"\parbox[c]{1em}{\includegraphics[width="+ str(width)+r"\textwidth]{"+self.folder+r"/figures/all_figures/"+file_name+r".png}}")
-        if last:
-            arg += r"\\"
-        else:
-            arg += "&"
-        return arg
-        return arg
-
-    def generate_report(self):
-        # Basic document
-        # Document with `\maketitle` command activated
-        doc = Document(default_filepath=(self.folder + r"/figures"))
-        doc.documentclass = Command(
-            'documentclass',
-            options=['10pt', 'a4'],
-            arguments=['article'],
-        )
-        doc.packages.append(NoEscape(r'\setcounter{tocdepth}{4}'))
-        doc.packages.append(NoEscape(r'\setcounter{secnumdepth}{1}'))
-        # usepackages
-        doc.packages.append(Package('helvet'))
-        doc.packages.append(Package('graphicx'))
-        doc.packages.append(Package('geometry'))
-        doc.packages.append(Package('float'))
-        doc.packages.append(Package('amsmath'))
-        doc.packages.append(Package('multicol'))
-        doc.packages.append(Package('ragged2e'))
-        doc.packages.append(Package('breakurl'))
-        doc.packages.append(Package('booktabs, multirow'))
-        doc.packages.append(Package('epstopdf'))
-        doc.packages.append(NoEscape(r'\usepackage[nolist, nohyperlinks]{acronym}'))
-        doc.packages.append(Package('hyperref'))
-
-
-        # add commands
-        doc.preamble.append(NoEscape(r"\renewcommand{\familydefault}{\sfdefault}"))
-        doc.preamble.append(NoEscape(r"\newcommand\Tstrut{\rule{0pt}{3ex}}  % = `top' strut"))
-        doc.preamble.append(NoEscape(r"\newcommand\Bstrut{\rule[1ex]{0pt}{0pt}}   % = `bottom' strut"))
-
-
-        # make title
-        title = "Report for Session: " + self.session
-        doc.preamble.append(Command('title', title))
-        #doc.preamble.append(Command('author', 'Anonymous author'))
-        doc.preamble.append(Command('date', NoEscape(r'\today')))
-        doc.append(NoEscape(r'\maketitle'))
-        doc.append(NoEscape(r'\tableofcontents'))
-        doc.append(NewPage())
-        doc.append(NoEscape(r'\newgeometry{vmargin={12mm}, hmargin={10mm,10mm}}'))
-        doc.append(NoEscape(r'\bigskip'))
-
-        # summary section
-        with doc.create(Section('Session summary')):
-            # create summary table
-            with doc.create(LongTabu("X | X")) as summary_table:
-                with doc.create(Tabular("r r")) as small_table:
-                    small_table.add_row(["Summary",""])
-                    small_table.add_hline()
-                    small_table.add_row(["Gamble side:", self.gamble_side])
-                    small_table.add_hline()
-                    small_table.add_row(["All trials", self.all_trials_df.index.max()])
-                    small_table.add_row(["Good trials", self.good_trials_df.index.max()])
-                    small_table.add_row(["Selected trials", self.selected_trials_df.index.max()])
-                    small_table.add_hline()
-                    small_table.add_row(["Probability bins", str(self.all_trials_df['probability'].unique())])
-            
-                # add overview plots
-                doc.append(NoEscape( self.image_box("hist_fit", last=True) ))
-                doc.append(NoEscape( self.image_box("trial_length")) )
-                doc.append(NoEscape( self.image_box("cluster_hist", last=True) ))
-                doc.append(NewPage())
-
-
-        # Add stuff to the document
-        with doc.create(Section('Spike Trains and Histogram for Reward Events')):
-                # create necessary variables
-                for cluster in self.clusters_df.loc[self.clusters_df['group']=='good'].index:
-                    # create subsection title
-                    subsection = "Cluster " + str(cluster)
-                    with doc.create(Subsection(subsection, label=False)):
-                        # create details table
-                        with doc.create(LongTabu("X | X")) as details_table:
-                           
-                            doc.append(NoEscape( self.image_box_cluster("isi",cluster) )) 
-                            doc.append(NoEscape( self.image_box_cluster("spk_train",cluster, last=True) )) 
-                            details_table.add_hline()
-                            details_table.add_row(["All Trials", "Rewarded Trials"])
-                            doc.append(NoEscape( self.image_box_cluster("spk_train_hist_all-events",cluster) )) 
-                            doc.append(NoEscape( self.image_box_cluster("spk_train_hist_all-events_reward-centered",cluster, last=True) )) 
-                            details_table.add_hline()
-                            details_table.add_row(["Gambl Side Reward", "Save Side Reward"])
-                            #details_table.end_table_header()
-                            doc.append(NoEscape( self.image_box_cluster("spk_train_hist_gamble_reward",cluster) ))
-                            doc.append(NoEscape( self.image_box_cluster("spk_train_hist_save_reward", cluster, last=True) ))
-                            #details_table.add_hline()
-                            details_table.add_row(["Gambl Side No-Reward", "Save Side No-Reward"])
-                            doc.append(NoEscape( self.image_box_cluster("spk_train_hist_gamble_no-reward",cluster) ))
-                            doc.append(NoEscape( self.image_box_cluster("spk_train_hist_save_no-reward",cluster, last=True) ))
-                    doc.append(NewPage())
-
-        # create file_name
-        filepath = (self.folder+"/"+self.session+"-report")
-        # create pdf
-        doc.generate_pdf(filepath, clean=True, clean_tex=True)#, compiler='latexmk -f -xelatex -interaction=nonstopmode')
-        #doc.generate_tex(filepath)
-
-    # create interactive webpage
+            self.save_fig('spk_train_hist_save_'+str(cluster))
