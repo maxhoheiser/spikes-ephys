@@ -1003,7 +1003,7 @@ class SpikesEDA():
     # firing frequency binned ==========
 
 
-# Save all figures ===================================================================================================
+# Plot and Save all figures ===================================================================================================
 
     def save_fig(self, name):
         folder = self.folder+"/figures/all_figures"

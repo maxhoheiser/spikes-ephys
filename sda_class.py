@@ -33,12 +33,12 @@ def create_random_start(trial_nr,iter_nr, trials_ar, delta):
     random_li = np.zeros(shape=(trial_nr,iter_nr))
     #iterate over trials
     for i in range(trial_nr):
-        random_li[i,:]=(np.random.randint((trials_ar[i,0]+delta),(trials_ar[i,1]-delta), size=(iter_nr)) )-trials_ar[i,0]
+        random_li[i,:]=(np.random.randint((trials_ar[i,0]),(trials_ar[i,1]), size=(iter_nr)) )
     return random_li
 
 # get spikes for event aligned windows =============================
 
-def get_spikes_in_window_per_trial(data_ar, i, delta):
+def get_spikes_in_window(data_ar, i, delta):
     """get all spikes that fall into window(+-delta) around event i 
 
     Args:
@@ -49,14 +49,14 @@ def get_spikes_in_window_per_trial(data_ar, i, delta):
     Returns:
         np ar: array with spike times that are in window
     """
-    return (data_ar[( (data_ar>=(i-delta)) & (data_ar<=(i+delta)) )]-(i-delta))
+    return ((data_ar[( (data_ar>=(i-delta)) & (data_ar<=(i+delta)) )])-(i))
 
 # fixed event
-def get_spikes_in_window_all_trials_singlevent(spikes_ar_all, event_ar, delta):
+def get_spikes_in_window_all_trials_singlevent(spikes_ar, event_ar, delta):
     """get all spikes that fall in window of specific event for all trials
 
     Args:
-        spikes_ar_all (np ar): array of all spike times for cluster
+        spikes_ar_all (np ar): array of arrays of spike times for each trial
         event_ar (np ar): array of event times for each trial
         delta (float): 1/2 window width in sampling points
 
@@ -64,8 +64,8 @@ def get_spikes_in_window_all_trials_singlevent(spikes_ar_all, event_ar, delta):
         list: list of arrays with all spike times that fall in window for each trial
     """
     spikes_li_all = list()
-    for trial in range(event_ar.shape[0]):
-        spikes_li_all.append(get_spikes_in_window_per_trial(spikes_ar_all.values, event_ar[trial], delta))
+    for trial_event in event_ar:
+        spikes_li_all.append(get_spikes_in_window(spikes_ar, trial_event, delta))
     return spikes_li_all
 
 # random events
@@ -81,17 +81,12 @@ def get_spikes_in_window_per_trial_all_randrang(data_ar, range_ar, delta):
         list: list of arrays with spikes for all iterations for specific trial
     """
     results_li = list()
-    #binned_li = list()
-    #range_li = list()
+    # iterate ove all 1000 random events
     for i in range_ar:
-        #range_li.append(((i-delta),(i+delta)))
-        #results_li.append(data_ar[( (data_ar>=(i-delta)) & (data_ar<=(i+delta)) )]-(i-delta))
-        results_li.append(get_spikes_in_window_per_trial(data_ar, i, delta))
-        #binned_li.append( (np.histogram(results_li[-1], bins=50, range=[(i-delta),(i+delta)]))[0] )
-    return results_li#, binned_li#, range_li #np.array(results_li,dtype=object)
+        results_li.append(get_spikes_in_window(data_ar, i, delta))
+    return results_li
 
-
-def get_spikes_in_window_all_trial_all_randrang(spikes_per_trial_df, random_ar, delta):
+def get_spikes_in_window_all_trial_all_randrang(spikes_ar, random_ar, delta):
     """get spikes for all trials and iterations
 
     Args:
@@ -103,13 +98,12 @@ def get_spikes_in_window_all_trial_all_randrang(spikes_per_trial_df, random_ar, 
     """ 
     spiketimes_li = list()
     #binnes_li = list()
-    for i in range(spikes_per_trial_df.shape[0]):
-        #results_li, binned_li = get_random_range_spikes(spikes_per_trial_df[i].values, random_ar[i])
-        spiketimes_li.append(get_spikes_in_window_per_trial_all_randrang(spikes_per_trial_df[i].values, random_ar[i], delta))
-        #binnes_li.append(binned_li)
-    return spiketimes_li#, binnes_li
+    for i in range(random_ar.shape[0]):
+        spiketimes_li.append(get_spikes_in_window_per_trial_all_randrang(spikes_ar, random_ar[i], delta))
+    return spiketimes_li
 
 
+# binn data
 def bin_trial_spike_times_all_cluster(input_ar,nr_bins):
     """binn randm windows from all clusters, all trials all iterations over complete trial
 
@@ -147,7 +141,12 @@ def bin_trial_spike_times_single_cluster(input_ar,nr_bins):
     # z = random iteration 1 to 1000
     data_ar=np.zeros(shape=(nr_bins,iterations),dtype=int)
     for it in range(iterations):
-        data_ar[:,it]=(np.histogram(np.concatenate(input_ar[:,it]).ravel(),bins=nr_bins))[0]
+        # check if array not empty
+        if np.any(input_ar[0,it]):
+            data_ar[:,it]=(np.histogram(np.concatenate(input_ar[:,it]).ravel(),bins=nr_bins))[0]
+        #if empty
+        else:
+            data_ar[:,it]=(np.histogram(input_ar[:,it],bins=nr_bins))[0]
     return data_ar
 
 
@@ -179,7 +178,7 @@ class SpikesSDA():
 
         Args:
             neuron_idx (int): [description]
-            
+
         Returns:
             int: [description]
         """
@@ -214,7 +213,7 @@ class SpikesSDA():
             [type]: [description]
         """
         
-        delta = window*20
+        delta=window*20
         
         # initialize data array 
         #y=clusters
@@ -228,25 +227,23 @@ class SpikesSDA():
         spiketimes_data_ar = np.zeros(shape=(y,x,z),dtype=object)
         
         # reward alignded database
-        reward_aligned_ar = np.zeros(y,dtype=object)
+        reward_aligned_ar = np.zeros((y,x),dtype=object)
         
         #### create random start point array for all trials 
         #get trial data
-        trial_ar = np.zeros((x,2))
-        trial_ar[:,0]=self.selected_trials_df['start']
-        trial_ar[:,1]=self.selected_trials_df['end']
+        trials_ar = np.zeros((x,3))
+        trials_ar[:,0]=self.selected_trials_df['start']
+        trials_ar[:,1]=self.selected_trials_df['end']
+        trials_ar[:,2]=self.selected_trials_df[event]
         #
         random_ar = np.zeros(shape=(x,z),dtype=int)
-        random_ar = create_random_start(x,z, trial_ar, delta)
+        random_ar = create_random_start(x,z, trials_ar, delta)
 
         #get spikes for all clusters
-        for i in range(y):
-            spiketimes_data_ar[i,:,:] =get_spikes_in_window_all_trial_all_randrang(self.spikes_per_trial_ar[i], random_ar, delta)
-
-            cluster_name = self.get_cluster_name_from_neuron_idx(i)
-            spikes = self.spikes_df[self.spikes_df.loc[:]['cluster'] == cluster_name]['spike_times']
-            trials = self.selected_trials_df[event]
-            reward_aligned_ar[i]=get_spikes_in_window_all_trials_singlevent(spikes,trials,delta)
+        # get spikes
+        for cl in range(y):
+            spiketimes_data_ar[cl,:,:] = get_spikes_in_window_all_trial_all_randrang(self.spikes_per_cluster_ar[cl], random_ar, delta)
+            reward_aligned_ar[cl,:]=np.array(get_spikes_in_window_all_trials_singlevent(self.spikes_per_cluster_ar[cl], trials_ar[:,2], delta))
 
         #create flattend spike times for each iteration
         binned = bin_trial_spike_times_all_cluster(spiketimes_data_ar,bins)
@@ -362,20 +359,46 @@ class SpikesSDA():
         
         fig,ax = plt.subplots()
 
-        binned_reward = np.histogram(np.concatenate(reward_aligned_ar[cluster]).ravel(), bins=bins)[0]
-        ax.plot(x,binned_reward, linewidth=3, alpha=1, label="reward aligned ")
+        binned_reward = np.histogram(np.concatenate(reward_aligned_ar[cluster,:]).ravel(), bins=bins)[0]
+        ax.plot(x,binned_reward, linewidth=3, alpha=1, label="reward aligned")
 
         # 
-        ax.axvline(x=0,linewidth=1, color='r', label="reward")
-        ax.plot(x,mean_ar[cluster], color="black", label="mean")
+        ax.axvline(x=0,linewidth=1, color='r', label="reward event")
+        ax.plot(x,mean_ar[cluster], color="black", label="shuffled mean")
 
         # plot +-95%
         #ax.fill_between(x, np.zeros(bins), percentil_ar[4,:], color='b', alpha=.3, label="0.5th% to 99.5th%")
         ax.fill_between(x, percentil_ar[0,cluster,:], percentil_ar[4,cluster,:], color='b', alpha=0.3, label="0.5th% to 99.5th%")
 
-        lines_labels = [ax.get_legend_handles_labels() for ax in fig.axes]
-        lines, labels = [sum(lol, []) for lol in zip(*lines_labels)]
-        fig.legend(lines, labels,loc=1,ncol=6)
+        
+        ax.legend()
+
+        # axis
+        labels = [0]
+        labels+=np.linspace(-window,window,9,dtype=int).tolist()
+        labels.append(0)
+        ax.set_xticklabels(labels)
+        #labels
+        plt.xlabel('window [ms]')
+        plt.ylabel('spike count')
+
+
+        #delete
+        ax.set_title(f"name:{self.get_cluster_name_from_neuron_idx(cluster)} - idx:{cluster}")
         
         return fig,ax
 
+ # Plot and Save all figures =======================================
+    def save_plot(self, name):
+        folder = self.folder+"/figures/sda_figures"
+        plt.savefig(folder+"/"+name+'.png',dpi=200, format='png', bbox_inches='tight')
+        plt.close()
+    
+    def save_fig(self, name, fig):
+        folder = self.folder+"/figures/sda_figures"
+        fig.savefig(folder+"/"+name+'.png',dpi=200, format='png', bbox_inches='tight')
+
+    def save_all_clusters_compare_random_fixed(self,window,bins,reward_aligned_ar,mean_ar,percentil_ar,name):
+        for cluster in range(self.spikes_per_cluster_ar.shape[0]):
+            file_name = name+f"_{self.get_cluster_name_from_neuron_idx(cluster)}"
+            self.save_fig(file_name,(self.plt_compare_random_fixed(cluster,window,bins,reward_aligned_ar,mean_ar,percentil_ar))[0])
