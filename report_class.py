@@ -59,6 +59,8 @@ class SpikesReport():
         return arg
 
     def generate_report(self):
+        # prepareation variables
+        block = self.selected_trials_df['probability'].unique()
         # Basic document
         # Document with `\maketitle` command activated
         doc = Document(default_filepath=(self.folder + r"/figures"))
@@ -132,7 +134,6 @@ class SpikesReport():
                     with doc.create(Subsection(subsection, label=False)):
                         # create details table
                         with doc.create(LongTabu("X | X")) as details_table:
-                           
                             doc.append(NoEscape( self.image_box_cluster("isi",cluster) )) 
                             doc.append(NoEscape( self.image_box_cluster("spk_train",cluster, last=True) )) 
                             details_table.add_hline()
@@ -148,6 +149,33 @@ class SpikesReport():
                             details_table.add_row(["Gambl Side No-Reward", "Save Side No-Reward"])
                             doc.append(NoEscape( self.image_box_cluster("spk_train_hist_gamble_no-reward",cluster) ))
                             doc.append(NoEscape( self.image_box_cluster("spk_train_hist_save_no-reward",cluster, last=True) ))
+                        doc.append(NewPage())
+
+                        with doc.create(LongTabu("X | X")) as bootstrap_table:
+                            doc.append('Reward aligned compard to random aligned\newline\newline')
+                            bootstrap_table.add_row(["Gamble-Side", "Save-Side"])
+                            doc.append(NoEscape( self.image_box_cluster("reward_aligned_gamble",cluster) ))
+                            doc.append(NoEscape( self.image_box_cluster("reward_aligned_save", cluster, last=True) ))
+                            bootstrap_table.add_hline()
+                            bootstrap_table.add_row(["Reward", "No-Reward"])
+                            doc.append(NoEscape( self.image_box_cluster("reward_aligned_reward",cluster) ))
+                            doc.append(NoEscape( self.image_box_cluster("reward_aligned_no_reward", cluster, last=True) ))
+                            # block 1
+                            bootstrap_table.add_hline()
+                            bootstrap_table.add_row([f"Block 1: {block[0]}%",""])
+                            doc.append(NoEscape( self.image_box_cluster("reward_aligned_block1_reward",cluster) ))
+                            doc.append(NoEscape( self.image_box_cluster("reward_aligned_block1_no_reward", cluster, last=True) ))
+                            doc.append(NewPage())
+                            # block 2
+                            bootstrap_table.add_hline()
+                            bootstrap_table.add_row([f"Block 2: {block[1]}%",""])
+                            doc.append(NoEscape( self.image_box_cluster("reward_aligned_block2_reward",cluster) ))
+                            doc.append(NoEscape( self.image_box_cluster("reward_aligned_block2_no_reward", cluster, last=True) ))
+                            # block 3
+                            bootstrap_table.add_hline()
+                            bootstrap_table.add_row([f"Block 3: {block[2]}%",""])
+                            doc.append(NoEscape( self.image_box_cluster("reward_aligned_block3_reward",cluster) ))
+                            doc.append(NoEscape( self.image_box_cluster("reward_aligned_block3_no_reward", cluster, last=True) ))
                     doc.append(NewPage())
 
         # create file_name

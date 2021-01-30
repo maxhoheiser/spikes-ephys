@@ -256,6 +256,195 @@ class SpikesSDA():
         return spiketimes_data_ar, reward_aligned_ar, binned, mean_ar, percentil_ar
 
 
+    def get_all_bootstrap_subselections(self, spiketimes_data_ar, reward_aligned_ar, binned, mean_ar, percentil_ar,bins ):
+        # cluster and neuron index
+        all_cluster_names = self.clusters_df[self.clusters_df['group']=='good'].index.values
+        all_cluster_ids = np.arange(self.spikes_per_cluster_ar.shape[0])
+
+
+        # selecte rewarded trials
+        trial_selector_reward = self.selected_trials_df['reward_given'].values
+        trial_selector_no_reward = np.invert(self.selected_trials_df['reward_given'].values)
+        trial_selector_gamble = self.selected_trials_df[self.gamble_side].values
+        trial_selector_save = np.invert(self.selected_trials_df[self.gamble_side].values)
+
+
+        # block selector
+        blocks = self.selected_trials_df['probability'].unique()
+
+        trial_selector_block1 = self.selected_trials_df['probability']==blocks[0]
+        trial_selector_block2 = self.selected_trials_df['probability']==blocks[1]
+        trial_selector_block3 = self.selected_trials_df['probability']==blocks[2]
+
+        # Subselected Trials =============================================
+        # reward algined subselected reward
+        reward_alinged_subselected_reward = reward_aligned_ar[:,trial_selector_reward]
+        spiketimes_data_subselected_reward = spiketimes_data_ar[:,trial_selector_reward,:]
+        binned_subselected_reward = bin_trial_spike_times_all_cluster(spiketimes_data_subselected_reward,bins)
+        mean_subselected_reward = np.mean(binned_subselected_reward, axis=2)
+        percentil_subselected_reward = np.percentile(binned_subselected_reward, [0.5,25,50,75,99.5], axis=2)
+        rw_dict={
+                "reward_alinged":reward_alinged_subselected_reward,
+                "spiketimes_data":spiketimes_data_subselected_reward,
+                "binned":binned_subselected_reward,
+                "mean":mean_subselected_reward,
+                "percentiles":percentil_subselected_reward,
+                "filename":"reward_aligned_reward"
+                }
+
+        # reward aligned subselected no reward
+        reward_alinged_subselected_no_reward = reward_aligned_ar[:,trial_selector_no_reward]
+        spiketimes_data_subselected_no_reward = spiketimes_data_ar[:,trial_selector_no_reward,:]
+        binned_subselected_no_reward = bin_trial_spike_times_all_cluster(spiketimes_data_subselected_no_reward,bins)
+        mean_subselected_no_reward = np.mean(binned_subselected_no_reward, axis=2)
+        percentil_subselected_no_reward = np.percentile(binned_subselected_no_reward, [0.5,25,50,75,99.5], axis=2)
+        norw_dict={
+                "reward_alinged":reward_alinged_subselected_no_reward,
+                "spiketimes_data":spiketimes_data_subselected_no_reward,
+                "binned":binned_subselected_no_reward,
+                "mean":mean_subselected_no_reward,
+                "percentiles":percentil_subselected_no_reward,
+                "filename":"reward_aligned_no_reward"
+                }
+
+        # reward aligned subselected gamble
+        reward_alinged_subselected_gamble = reward_aligned_ar[:,trial_selector_gamble]
+        spiketimes_data_subselected_gamble = spiketimes_data_ar[:,trial_selector_gamble,:]
+        binned_subselected_gamble = bin_trial_spike_times_all_cluster(spiketimes_data_subselected_gamble,bins)
+        mean_subselected_gamble = np.mean(binned_subselected_gamble, axis=2)
+        percentil_subselected_gamble = np.percentile(binned_subselected_gamble, [0.5,25,50,75,99.5], axis=2)
+        gamble_dict={
+                "reward_alinged":reward_alinged_subselected_gamble,
+                "spiketimes_data":spiketimes_data_subselected_gamble,
+                "binned":binned_subselected_gamble,
+                "mean":mean_subselected_gamble,
+                "percentiles":percentil_subselected_gamble,
+                "filename":"reward_aligned_gamble"
+                }
+
+        # reward aligned subselected safe
+        reward_alinged_subselected_save = reward_aligned_ar[:,trial_selector_save]
+        spiketimes_data_subselected_save = spiketimes_data_ar[:,trial_selector_save,:]
+        binned_subselected_save = bin_trial_spike_times_all_cluster(spiketimes_data_subselected_save,bins)
+        mean_subselected_save = np.mean(binned_subselected_save, axis=2)
+        percentil_subselected_save = np.percentile(binned_subselected_save, [0.5,25,50,75,99.5], axis=2)
+        save_dict={
+                "reward_alinged":reward_alinged_subselected_save,
+                "spiketimes_data":spiketimes_data_subselected_save,
+                "binned":binned_subselected_save,
+                "mean":mean_subselected_save,
+                "percentiles":percentil_subselected_save,
+                "filename":"reward_aligned_save"
+                }
+
+        # Blocks Trials ================================================
+        # Block 1 reward
+        reward_alinged_subselected_block1_rw = reward_aligned_ar[:,( (trial_selector_block1)&(trial_selector_reward) )]
+        spiketimes_data_subselected_block1_rw = spiketimes_data_ar[:,( (trial_selector_block1)&(trial_selector_reward) ),:]
+        binned_subselected_block1_rw = bin_trial_spike_times_all_cluster(spiketimes_data_subselected_block1_rw,bins)
+        mean_subselected_block1_rw = np.mean(binned_subselected_block1_rw, axis=2)
+        percentil_subselected_block1_rw = np.percentile(binned_subselected_block1_rw, [0.5,25,50,75,99.5], axis=2)
+        block1_rw_dict={
+                "reward_alinged":reward_alinged_subselected_block1_rw,
+                "spiketimes_data":spiketimes_data_subselected_block1_rw,
+                "binned":binned_subselected_block1_rw,
+                "mean":mean_subselected_block1_rw,
+                "percentiles":percentil_subselected_block1_rw,
+                "filename":"reward_aligned_block_1_reward"
+                }
+
+        # Block 1 no-reward
+        reward_alinged_subselected_block1_norw = reward_aligned_ar[:,( (trial_selector_block1)&(trial_selector_no_reward) )]
+        spiketimes_data_subselected_block1_norw = spiketimes_data_ar[:,( (trial_selector_block1)&(trial_selector_no_reward) ),:]
+        binned_subselected_block1_norw = bin_trial_spike_times_all_cluster(spiketimes_data_subselected_block1_norw,bins)
+        mean_subselected_block1_norw = np.mean(binned_subselected_block1_norw, axis=2)
+        percentil_subselected_block1_norw = np.percentile(binned_subselected_block1_norw, [0.5,25,50,75,99.5], axis=2)
+        block1_norw_dict={
+                "reward_alinged":reward_alinged_subselected_block1_norw,
+                "spiketimes_data":spiketimes_data_subselected_block1_norw,
+                "binned":binned_subselected_block1_norw,
+                "mean":mean_subselected_block1_norw,
+                "percentiles":percentil_subselected_block1_norw,
+                "filename":"reward_aligned_block1_no_reward"
+                }
+
+        ##
+        # Block 2 reward
+        reward_alinged_subselected_block2_rw = reward_aligned_ar[:,( (trial_selector_block2)&(trial_selector_reward) )]
+        spiketimes_data_subselected_block2_rw = spiketimes_data_ar[:,( (trial_selector_block2)&(trial_selector_reward) ),:]
+        binned_subselected_block2_rw = bin_trial_spike_times_all_cluster(spiketimes_data_subselected_block2_rw,bins)
+        mean_subselected_block2_rw = np.mean(binned_subselected_block2_rw, axis=2)
+        percentil_subselected_block2_rw = np.percentile(binned_subselected_block2_rw, [0.5,25,50,75,99.5], axis=2)
+        block2_rw_dict={
+                "reward_alinged":reward_alinged_subselected_block2_rw,
+                "spiketimes_data":spiketimes_data_subselected_block2_rw,
+                "binned":binned_subselected_block2_rw,
+                "mean":mean_subselected_block2_rw,
+                "percentiles":percentil_subselected_block2_rw,
+                "filename":"reward_aligned_block2_reward"
+                }
+
+        # Bin 2 no-reward
+        reward_alinged_subselected_block2_norw = reward_aligned_ar[:,( (trial_selector_block2)&(trial_selector_no_reward) )]
+        spiketimes_data_subselected_block2_norw = spiketimes_data_ar[:,( (trial_selector_block2)&(trial_selector_no_reward) ),:]
+        binned_subselected_block2_norw = bin_trial_spike_times_all_cluster(spiketimes_data_subselected_block2_norw,bins)
+        mean_subselected_block2_norw = np.mean(binned_subselected_block2_norw, axis=2)
+        percentil_subselected_block2_norw = np.percentile(binned_subselected_block2_norw, [0.5,25,50,75,99.5], axis=2)
+        block2_norw_dict={
+                "reward_alinged":reward_alinged_subselected_block2_norw,
+                "spiketimes_data":spiketimes_data_subselected_block2_norw,
+                "binned":binned_subselected_block2_norw,
+                "mean":mean_subselected_block2_norw,
+                "percentiles":percentil_subselected_block2_norw,
+                "filename":"reward_aligned_block2_no_reward"
+                }
+
+        ##
+        # Bin 3 reward
+        reward_alinged_subselected_block3_rw = reward_aligned_ar[:,( (trial_selector_block3)&(trial_selector_reward) )]
+        spiketimes_data_subselected_block3_rw = spiketimes_data_ar[:,( (trial_selector_block3)&(trial_selector_reward) ),:]
+        binned_subselected_block3_rw = bin_trial_spike_times_all_cluster(spiketimes_data_subselected_block3_rw,bins)
+        mean_subselected_block3_rw = np.mean(binned_subselected_block3_rw, axis=2)
+        percentil_subselected_block3_rw = np.percentile(binned_subselected_block3_rw, [0.5,25,50,75,99.5], axis=2)
+        block3_rw_dict={
+                "reward_alinged":reward_alinged_subselected_block3_rw,
+                "spiketimes_data":spiketimes_data_subselected_block3_rw,
+                "binned":binned_subselected_block3_rw,
+                "mean":mean_subselected_block3_rw,
+                "percentiles":percentil_subselected_block3_rw,
+                "filename":"reward_aligned_block3_reward"
+                }
+
+        # Bin 3 no-reward
+        reward_alinged_subselected_block3_norw = reward_aligned_ar[:,( (trial_selector_block3)&(trial_selector_no_reward) )]
+        spiketimes_data_subselected_block3_norw = spiketimes_data_ar[:,( (trial_selector_block3)&(trial_selector_no_reward) ),:]
+        binned_subselected_block3_norw = bin_trial_spike_times_all_cluster(spiketimes_data_subselected_block3_norw,bins)
+        mean_subselected_block3_norw = np.mean(binned_subselected_block3_norw, axis=2)
+        percentil_subselected_block3_norw = np.percentile(binned_subselected_block3_norw, [0.5,25,50,75,99.5], axis=2)
+        block3_norw_dict={
+                "reward_alinged":reward_alinged_subselected_block3_norw,
+                "spiketimes_data":spiketimes_data_subselected_block3_norw,
+                "binned":binned_subselected_block3_norw,
+                "mean":mean_subselected_block3_norw,
+                "percentiles":percentil_subselected_block3_norw,
+                "filename":"reward_aligned_block3_no_reward"
+                }
+
+        # generate data dict ================================================
+        data_dict = {
+                    "all_reward":rw_dict,
+                    "all_norw":norw_dict,
+                    "all_gamble":gamble_dict,
+                    "all_save":save_dict,
+                    "block1_rw":block1_rw_dict,
+                    "block1_norw":block1_norw_dict,
+                    "block2_rw":block2_rw_dict,
+                    "block2_norw":block2_norw_dict,
+                    "block3_rw":block3_rw_dict,
+                    "block3_norw":block3_norw_dict,
+                    }
+
+        return data_dict
 
 
 
@@ -375,11 +564,11 @@ class SpikesSDA():
 
         # axis
         labels = [0]
-        labels+=np.linspace(-window,window,9,dtype=int).tolist()
+        labels+=np.linspace(-window/1000,window/1000,9,dtype=int).tolist()
         labels.append(0)
         ax.set_xticklabels(labels)
         #labels
-        plt.xlabel('window [ms]')
+        plt.xlabel('window [s]')
         plt.ylabel('spike count')
 
 
@@ -390,15 +579,33 @@ class SpikesSDA():
 
  # Plot and Save all figures =======================================
     def save_plot(self, name):
-        folder = self.folder+"/figures/sda_figures"
+        folder = self.folder+"/figures/all_figures"
         plt.savefig(folder+"/"+name+'.png',dpi=200, format='png', bbox_inches='tight')
         plt.close()
     
     def save_fig(self, name, fig):
-        folder = self.folder+"/figures/sda_figures"
+        folder = self.folder+"/figures/all_figures"
         fig.savefig(folder+"/"+name+'.png',dpi=200, format='png', bbox_inches='tight')
 
     def save_all_clusters_compare_random_fixed(self,window,bins,reward_aligned_ar,mean_ar,percentil_ar,name):
         for cluster in range(self.spikes_per_cluster_ar.shape[0]):
             file_name = name+f"_{self.get_cluster_name_from_neuron_idx(cluster)}"
             self.save_fig(file_name,(self.plt_compare_random_fixed(cluster,window,bins,reward_aligned_ar,mean_ar,percentil_ar))[0])
+
+
+    def generate_plots(self,window,iterations,bins):
+        # prepare necessary data arrays
+        spiketimes_data_ar, reward_aligned_ar, binned, mean_ar, percentil_ar = self.get_bootstrap_all_clusters(window, iterations, bins, 'reward')
+        # get subselections
+        data_dict = self.get_all_bootstrap_subselections(spiketimes_data_ar, reward_aligned_ar, binned, mean_ar, percentil_ar,bins)
+        
+        # iterate over all sub dicts
+        for key,value in data_dict.items():
+            self.save_all_clusters_compare_random_fixed(window,
+                                                        bins,
+                                                        value["reward_alinged"],
+                                                        value["mean"],
+                                                        value["percentiles"],
+                                                        value["filename"]
+                                                        )
+        
