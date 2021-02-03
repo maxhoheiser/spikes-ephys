@@ -9,6 +9,11 @@ from mpl_toolkits.mplot3d import Axes3D
 from matplotlib import cm
 from matplotlib.ticker import LinearLocator, FormatStrFormatter
 
+from scipy.stats import norm
+from sklearn.preprocessing import StandardScaler
+from sklearn.preprocessing import scale
+from scipy.stats import shapiro
+
 # for pylatex
 from pylatex import Document, Section, Subsection, Command, Package, NewPage, LongTabu, Tabular
 from pylatex.utils import italic, NoEscape
@@ -256,7 +261,7 @@ class SpikesSDA():
         return spiketimes_data_ar, reward_aligned_ar, binned, mean_ar, percentil_ar
 
 
-    def get_all_bootstrap_subselections(self, spiketimes_data_ar, reward_aligned_ar, binned, mean_ar, percentil_ar,bins ):
+    def get_all_bootstrap_subselections(self, spiketimes_data_ar, reward_aligned_ar,bins,binned_ar,mean_ar,percentil_ar ):
         # cluster and neuron index
         all_cluster_names = self.clusters_df[self.clusters_df['group']=='good'].index.values
         all_cluster_ids = np.arange(self.spikes_per_cluster_ar.shape[0])
@@ -338,6 +343,20 @@ class SpikesSDA():
                 }
 
         # Blocks Trials ================================================
+        # Block 1 all
+        reward_alinged_subselected_block1 = reward_aligned_ar[:,trial_selector_block1]
+        spiketimes_data_subselected_block1 = spiketimes_data_ar[:,trial_selector_block1,:]
+        binned_subselected_block1 = bin_trial_spike_times_all_cluster(spiketimes_data_subselected_block1,bins)
+        mean_subselected_block1 = np.mean(binned_subselected_block1, axis=2)
+        percentil_subselected_block1 = np.percentile(binned_subselected_block1, [0.5,25,50,75,99.5], axis=2)
+        block1_all={
+                "reward_alinged":reward_alinged_subselected_block1,
+                "spiketimes_data":spiketimes_data_subselected_block1,
+                "binned":binned_subselected_block1,
+                "mean":mean_subselected_block1,
+                "percentiles":percentil_subselected_block1,
+                "filename":"reward_aligned_block2_all"
+                }
         # Block 1 reward
         reward_alinged_subselected_block1_rw = reward_aligned_ar[:,( (trial_selector_block1)&(trial_selector_reward) )]
         spiketimes_data_subselected_block1_rw = spiketimes_data_ar[:,( (trial_selector_block1)&(trial_selector_reward) ),:]
@@ -350,7 +369,7 @@ class SpikesSDA():
                 "binned":binned_subselected_block1_rw,
                 "mean":mean_subselected_block1_rw,
                 "percentiles":percentil_subselected_block1_rw,
-                "filename":"reward_aligned_block_1_reward"
+                "filename":"reward_aligned_block1_reward"
                 }
 
         # Block 1 no-reward
@@ -369,6 +388,20 @@ class SpikesSDA():
                 }
 
         ##
+        # Block 2 all
+        reward_alinged_subselected_block2 = reward_aligned_ar[:,trial_selector_block2]
+        spiketimes_data_subselected_block2 = spiketimes_data_ar[:,trial_selector_block2,:]
+        binned_subselected_block2 = bin_trial_spike_times_all_cluster(spiketimes_data_subselected_block2,bins)
+        mean_subselected_block2 = np.mean(binned_subselected_block2, axis=2)
+        percentil_subselected_block2 = np.percentile(binned_subselected_block2, [0.5,25,50,75,99.5], axis=2)
+        block2_all={
+                "reward_alinged":reward_alinged_subselected_block2,
+                "spiketimes_data":spiketimes_data_subselected_block2,
+                "binned":binned_subselected_block2,
+                "mean":mean_subselected_block2,
+                "percentiles":percentil_subselected_block2,
+                "filename":"reward_aligned_block2_all"
+                }
         # Block 2 reward
         reward_alinged_subselected_block2_rw = reward_aligned_ar[:,( (trial_selector_block2)&(trial_selector_reward) )]
         spiketimes_data_subselected_block2_rw = spiketimes_data_ar[:,( (trial_selector_block2)&(trial_selector_reward) ),:]
@@ -400,6 +433,20 @@ class SpikesSDA():
                 }
 
         ##
+        # Block 3 all
+        reward_alinged_subselected_block3 = reward_aligned_ar[:,trial_selector_block3]
+        spiketimes_data_subselected_block3 = spiketimes_data_ar[:,trial_selector_block3,:]
+        binned_subselected_block3 = bin_trial_spike_times_all_cluster(spiketimes_data_subselected_block3,bins)
+        mean_subselected_block3 = np.mean(binned_subselected_block3, axis=2)
+        percentil_subselected_block3 = np.percentile(binned_subselected_block3, [0.5,25,50,75,99.5], axis=2)
+        block3_all={
+                "reward_alinged":reward_alinged_subselected_block3,
+                "spiketimes_data":spiketimes_data_subselected_block3,
+                "binned":binned_subselected_block3,
+                "mean":mean_subselected_block3,
+                "percentiles":percentil_subselected_block3,
+                "filename":"reward_aligned_block3_all"
+                }
         # Bin 3 reward
         reward_alinged_subselected_block3_rw = reward_aligned_ar[:,( (trial_selector_block3)&(trial_selector_reward) )]
         spiketimes_data_subselected_block3_rw = spiketimes_data_ar[:,( (trial_selector_block3)&(trial_selector_reward) ),:]
@@ -430,26 +477,201 @@ class SpikesSDA():
                 "filename":"reward_aligned_block3_no_reward"
                 }
 
+        # all trials
+        all_dict={
+                "reward_alinged":reward_aligned_ar,
+                "spiketimes_data":spiketimes_data_ar,
+                "binned":binned_ar,
+                "mean":mean_ar,
+                "percentiles":percentil_ar,
+                "filename":"reward_aligned_block3_no_reward"
+                }
+
         # generate data dict ================================================
         data_dict = {
-                    "all_reward":rw_dict,
-                    "all_norw":norw_dict,
-                    "all_gamble":gamble_dict,
-                    "all_save":save_dict,
+                    "all":all_dict,
+                    "rw":rw_dict,
+                    "norw":norw_dict,
+                    "gamble":gamble_dict,
+                    "save":save_dict,
+                    "block1_all":block1_all,
                     "block1_rw":block1_rw_dict,
                     "block1_norw":block1_norw_dict,
+                    "block2_all":block2_all,
                     "block2_rw":block2_rw_dict,
                     "block2_norw":block2_norw_dict,
+                    "block3_all":block3_all,
                     "block3_rw":block3_rw_dict,
                     "block3_norw":block3_norw_dict,
                     }
 
         return data_dict
 
+    def scale_data(self, data):
+        if data.ndim==2:
+            # for 2d array i=samples, j=features
+            scaler = StandardScaler()
+            scaler.fit(data)
+            data_scaled = scaler.transform(data)
+            
+        if data.ndim==1:
+            # for 1d array 
+            data_scaled = scale(data)
+            
+        return data_scaled
+
+    def shapiro_wilk_test(self, data):
+        # normality test
+        stat, p = shapiro(data)
+        print('Statistics=%.3f, p=%.3f' % (stat, p))
+        # interpret
+        alpha = 0.05
+        if p > alpha:
+            print('Sample looks Gaussian (fail to reject H0)')
+        else:
+            print('Sample does not look Gaussian (reject H0)')
+        return stat,p
+
+    def get_fingerprint(self, reward_alinged_ar,lower_ar,upper_ar,bins):
+        # get bins that are outside of threshold +/- for each neuron
+        # parameter
+        all_clusters_names = self.clusters_df[self.clusters_df['group']=='good'].index.values
+        nr_clusters = all_clusters_names.shape[0]
+        #-1 under, 0 in, +1 above
+        fingerprint_ar = np.zeros((nr_clusters,bins),dtype=int)
+
+        for cl in range(nr_clusters):
+            bins_aligned=np.histogram(np.concatenate(reward_alinged_ar[cl]).ravel(),bins=bins)[0]
+            fingerprint_ar[cl][bins_aligned>upper_ar[cl]]=int(1)
+            fingerprint_ar[cl][bins_aligned<lower_ar[cl]]=int(-1)
+
+        # dataframe from array
+        #neurons_fingerprint_df=pd.DataFrame(all_clusters_names,columns="neuron name")
+        #columns=[f"bin {bin}" for bin in range(bins)]
+        #neurons_fingerprint_df[columns]=neurons_fingerprint
+        fingerprint_df = pd.DataFrame(fingerprint_ar,columns=[f"bin {bin}" for bin in range(bins)])
+        fingerprint_df["below"]=(fingerprint_df==int(-1)).sum(axis=1)
+        fingerprint_df["in"]=(fingerprint_df==int(0)).sum(axis=1)
+        fingerprint_df["above"]=(fingerprint_df==int(1)).sum(axis=1)
+
+        return fingerprint_df
 
 
+    def create_all_sessions_info_df(self):
+        fixed_columns = ["session", "tot. clusters", "nr. good", "nr. mua", "nr. noise",
+                        "tot. trials","good trials","selected trials",
+                        "rw block 1", "rw block 2", "rw block 3",
+                        "len block 1", "len block 2", "len block 3",
+                        ]
+        #columns_all
+        columns_all=list()
+        for trials in ["all","rw","norw"]:
+            columns_all.append(f"{trials} bevore") 
+            columns_all.append(f"{trials} bevore neurons") 
+            columns_all.append(f"{trials} across") 
+            columns_all.append(f"{trials} across neurons") 
+            columns_all.append(f"{trials} after") 
+            columns_all.append(f"{trials} after neurons") 
+            columns_all.append(f"{trials} all") 
+            columns_all.append(f"{trials} all neurons") 
+        #columns_blocks
+        columns_blocks=list()
+        for block in [1,2,3]:
+            # iterate over all , rw, norw
+            for trials in ["all","rw","norw"]:
+                columns_blocks.append(f"{block} {trials} bevore")
+                columns_blocks.append(f"{block} {trials} bevore neurons")
+                columns_blocks.append(f"{block} {trials} across")
+                columns_blocks.append(f"{block} {trials} across neurons")
+                columns_blocks.append(f"{block} {trials} after")
+                columns_blocks.append(f"{block} {trials} after neurons")
+                columns_blocks.append(f"{block} {trials} all")
+                columns_blocks.append(f"{block} {trials} all neurons")
 
- #Ploting statistical analysis ============================================================================================
+        info_df = pd.DataFrame(columns=(fixed_columns+columns_all+columns_blocks))
+        return info_df
+
+
+    def add_session_session_sig_info(self,data_dict,bins,info_df=False):
+        if info_df == False:
+            info_df = self.create_all_sessions_info_df()
+        current_index = info_df.shape[0]+1
+        info_df.loc[current_index,'session']=self.session
+
+        cluster_count = self.clusters_df["group"].value_counts().values
+        info_df.loc[info_df['session']==self.session,["tot. clusters","nr. good","nr. mua", "nr. noise"]]=[cluster_count.sum()] + cluster_count.tolist()
+        # trials info
+        info_df.loc[info_df['session']==self.session,["tot. trials","good trials","selected trials"]]=[self.all_trials_df.shape[0],self.good_trials_df.shape[0],self.selected_trials_df.shape[0]]
+        # block info
+        blocks = self.selected_trials_df['probability'].unique()
+        info_df.loc[info_df['session']==self.session,["rw block 1", "rw block 2", "rw block 3"]]=blocks
+        info_df.loc[info_df['session']==self.session,["len block 1"]]=(self.selected_trials_df[self.selected_trials_df["probability"]==blocks[0]]).shape[0]
+        info_df.loc[info_df['session']==self.session,["len block 2"]]=(self.selected_trials_df[self.selected_trials_df["probability"]==blocks[1]]).shape[0]
+        info_df.loc[info_df['session']==self.session,["len block 3"]]=(self.selected_trials_df[self.selected_trials_df["probability"]==blocks[2]]).shape[0]
+        # neural findings===============================================================================================
+        # neural response all trials========================================
+        for trials in ["all","rw","norw"]:
+            key = f"{trials}"
+            data = data_dict[key]["reward_alinged"]
+            lower = data_dict[key]["percentiles"][0]
+            upper = data_dict[key]["percentiles"][4]
+            fingerprint = self.get_fingerprint(data,lower,upper,bins)
+            # bevore reward event [tot number, indeces]
+            bevore = np.where((fingerprint.loc[:,"bin 20":"bin 25"]>0).sum(axis=1)>=4)[0]
+            across = np.where((fingerprint.loc[:,"bin 23":"bin 27"]>0).sum(axis=1)>=4)[0]
+            after = np.where((fingerprint.loc[:,"bin 25":"bin 30"]>0).sum(axis=1)>=4)[0]
+            # get intersecting values
+            true_bevore = np.array([i for i in bevore if i not in np.concatenate((across,after))])
+            true_after = np.array([i for i in after if i not in np.concatenate((bevore,across))])
+            all_unique=np.unique(np.concatenate([bevore, across, after], axis=0))
+            # add to dataframe
+            info_df.at[current_index,f"{trials} bevore"]=true_bevore.shape[0]
+            info_df.at[current_index,f"{trials} bevore neurons"]=true_bevore.tolist()
+            # across reward event [tot number, indeces]
+            info_df.at[current_index,f"{trials} across"]=across.shape[0]
+            info_df.at[current_index,f"{trials} across neurons"]=across.tolist()
+            # after reward event [tot number, indeces]
+            info_df.at[current_index,f"{trials} after"]=true_after.shape[0]
+            info_df.at[current_index,f"{trials} after neurons"]=true_after.tolist()
+            # all unique bevore, across and after
+            info_df.at[current_index,f"{trials} all"]=all_unique.shape[0]
+            info_df.at[current_index,f"{trials} all neurons"]=all_unique.tolist()
+                            
+        # nerual response blocks ========================================
+        for block in [1,2,3]:
+            # iterate over all , rw, norw
+            for trials in ["all","rw","norw"]:
+            # all
+                key = f"block{block}_{trials}"
+                data = data_dict[key]["reward_alinged"]
+                lower = data_dict[key]["percentiles"][0]
+                upper = data_dict[key]["percentiles"][4]
+                fingerprint = self.get_fingerprint(data,lower,upper,bins)
+                # get values
+                bevore = np.where((fingerprint.loc[:,"bin 20":"bin 25"]>0).sum(axis=1)>=4)[0]
+                across = np.where((fingerprint.loc[:,"bin 23":"bin 27"]>0).sum(axis=1)>=4)[0]
+                after = np.where((fingerprint.loc[:,"bin 25":"bin 30"]>0).sum(axis=1)>=4)[0]
+                # get intersecting values
+                true_bevore = np.array([i for i in bevore if i not in np.concatenate((across,after))])
+                true_after = np.array([i for i in after if i not in np.concatenate((bevore,across))])
+                all_unique=np.unique(np.concatenate([bevore, across, after], axis=0))
+                # bevore reward event [tot number, indeces]
+                info_df.at[1,f"{block} {trials} bevore"]=true_bevore.shape[0]
+                info_df.at[1,f"{block} {trials} bevore neurons"]=bevore.tolist()
+                # across reward event [tot number, indeces]
+                info_df.at[1,f"{block} {trials} across"]=across.shape[0]
+                info_df.at[1,f"{block} {trials} across neurons"]=across.tolist()
+                # after reward event [tot number, indeces]
+                info_df.at[1,f"{block} {trials} after"]=true_after.shape[0]
+                info_df.at[1,f"{block} {trials} after neurons"]=after.tolist()
+                # all unique neurons bevore, across or after
+                info_df.at[current_index,f"{block} {trials} all"]=all_unique.shape[0]
+                info_df.at[current_index,f"{block} {trials} all neurons"]=all_unique.tolist()
+
+        return info_df
+
+
+ #Ploting statistical analysis ======s======================================================================================
     def plt_surf_single_cluster(self, binned_ar):
         """3D surface + color map plot a surface of bin_counts for given binned data arrayo
         ver bins (x=bin, y=iterations, z=bin_count)
@@ -550,18 +772,14 @@ class SpikesSDA():
 
         binned_reward = np.histogram(np.concatenate(reward_aligned_ar[cluster,:]).ravel(), bins=bins)[0]
         ax.plot(x,binned_reward, linewidth=3, alpha=1, label="reward aligned")
-
         # 
         ax.axvline(x=0,linewidth=1, color='r', label="reward event")
         ax.plot(x,mean_ar[cluster], color="black", label="shuffled mean")
-
         # plot +-95%
         #ax.fill_between(x, np.zeros(bins), percentil_ar[4,:], color='b', alpha=.3, label="0.5th% to 99.5th%")
         ax.fill_between(x, percentil_ar[0,cluster,:], percentil_ar[4,cluster,:], color='b', alpha=0.3, label="0.5th% to 99.5th%")
 
-        
         ax.legend()
-
         # axis
         labels = [0]
         labels+=np.linspace(-window/1000,window/1000,9,dtype=int).tolist()
@@ -570,12 +788,198 @@ class SpikesSDA():
         #labels
         plt.xlabel('window [s]')
         plt.ylabel('spike count')
-
-
         #delete
         ax.set_title(f"name:{self.get_cluster_name_from_neuron_idx(cluster)} - idx:{cluster}")
         
         return fig,ax
+
+    def plt_compare_random_fixed_sigma(cluster,window,bins,reward_aligned_ar,mean_ar,sigma_ar):
+        delta=window*20
+        x=np.linspace(-delta,+delta,bins)
+
+        fig,ax = plt.subplots()
+
+        binned_reward = np.histogram(np.concatenate(reward_aligned_ar[cluster,:]).ravel(), bins=bins)[0]
+        ax.plot(x,binned_reward, linewidth=3, alpha=1, label="reward aligned")
+        # 
+        ax.axvline(x=0,linewidth=1, color='r', label="reward event")
+        ax.plot(x,mean_ar[cluster], color="black", label="shuffled mean")
+
+        # plot +-95%
+        #ax.fill_between(x, np.zeros(bins), percentil_ar[4,:], color='b', alpha=.3, label="0.5th% to 99.5th%")
+        #+-1sigma
+        for factor in [1,2,3]:
+            low = mean_ar[cluster]-factor*sigma_ar[cluster]
+            high = mean_ar[cluster]+factor*sigma_ar[cluster]
+            ax.fill_between(x, low, high, color='b', alpha=0.2*(1/factor), label=f"+-{factor}sigma")
+        #-2sigma
+        #-2sigma
+        ax.legend()
+        # axis
+        labels = [0]
+        labels+=np.linspace(-window/1000,window/1000,9,dtype=int).tolist()
+        labels.append(0)
+        ax.set_xticklabels(labels)
+        #labels
+        plt.xlabel('window [s]')
+        plt.ylabel('spike count')
+        return fig, ax
+
+    def plt_compare_random_fixed_sigma(self, cluster,window,bins,reward_aligned_ar,mean_ar,sigma_ar):
+        delta=window*20
+        x=np.linspace(-delta,+delta,bins)
+
+        fig,ax = plt.subplots()
+
+        binned_reward = np.histogram(np.concatenate(reward_aligned_ar[cluster,:]).ravel(), bins=bins)[0]
+        ax.plot(x,binned_reward, linewidth=3, alpha=1, label="reward aligned")
+        # 
+        ax.axvline(x=0,linewidth=1, color='r', label="reward event")
+        ax.plot(x,mean_ar[cluster], color="black", label="shuffled mean")
+
+        # plot +-95%
+        #ax.fill_between(x, np.zeros(bins), percentil_ar[4,:], color='b', alpha=.3, label="0.5th% to 99.5th%")
+        #+-1sigma
+        for factor in [1,2,3]:
+            low = mean_ar[cluster]-factor*sigma_ar[cluster]
+            high = mean_ar[cluster]+factor*sigma_ar[cluster]
+            ax.fill_between(x, low, high, color='b', alpha=0.2*(1/factor), label=f"+-{factor}sigma")
+        #-2sigma
+        #-2sigma
+        ax.legend()
+        # axis
+        labels = [0]
+        labels+=np.linspace(-window/1000,window/1000,9,dtype=int).tolist()
+        labels.append(0)
+        ax.set_xticklabels(labels)
+        #labels
+        plt.xlabel('window [s]')
+        plt.ylabel('spike count')
+        #delete
+        ax.set_title(f"name:{self.get_cluster_name_from_neuron_idx(cluster)} - idx:{cluster}")
+        
+        return fig,ax
+
+
+    def plt_fit_normdist(self, data):
+        """plot normaldistributin fitted to histogram
+
+        Args:
+            data (np ar): input data[samples,features]
+        """
+        mu, std = norm.fit(data)
+
+        fig,ax = plt.subplots()
+        # plot histogram
+        ax.hist(data, bins=25, density=True, alpha=0.6, color='b',label='bin count')
+
+        # Plot the PDF.
+        xmin, xmax = plt.xlim()
+        x = np.linspace(xmin, xmax, 100)
+        p = norm.pdf(x, mu, std)
+        ax.plot(x, p, 'k', linewidth=2,label='normal fit')
+        title = "Normal distribution fitted to data \n(mu:%.2f, std:%.2f)" % (mu, std)
+        # namings usw
+        ax.set_xlabel('bin count')
+        ax.set_ylabel('probability')
+        ax.legend()
+        ax.set_title(title)
+
+
+    def plt_fingerprint(self, fingerprint_df,axis_label):
+        fig,ax = plt.subplots()
+        
+        test_x=fingerprint_df['below']
+        test_y=fingerprint_df['above'] 
+
+        #Generate a list of unique points
+        points=list(set(zip(test_x,test_y))) 
+        #Generate a list of point counts
+        count=[len([x for x,y in zip(test_x,test_y) if x==p[0] and y==p[1]]) for p in points]
+        #Now for the plotting:
+        plot_x=[i[0] for i in points]
+        plot_y=[i[1] for i in points]
+        count=np.array(count)
+        im = ax.scatter(plot_x,plot_y,c=count,s=60*count**0.95,cmap='Spectral_r',alpha=0.8)
+        fig.colorbar(im, orientation='vertical')
+
+        ax.scatter(plot_x,plot_y,c='black',s=2)
+        ax.set_xlabel(f'below {axis_label}')
+        ax.set_ylabel(f'above {axis_label}')
+
+        ax.set_yticks(np.arange(0,(test_y.max()+1)))
+
+        return fig,ax
+
+    def plt_neuron_fingerprint_all(self, data,title):
+        fig,ax= plt.subplots()
+        # define colormap
+        cmap = plt.get_cmap('viridis', np.max(data)-np.min(data)+1)
+        # plot data
+        c = ax.pcolor(data,cmap=cmap)
+        # plot reward line
+        ax.axvline(25,color='red',label='reward')
+        #tell the colorbar to tick at integers
+        cbar = fig.colorbar(c, ticks=np.arange(np.min(data),np.max(data)+1))
+        cbar.ax.set_yticklabels(['below', 'in', 'above'])  # vertically oriented colorbar
+        # add legend
+        ax.legend()
+        # set text
+        ax.set_title(f"Fingerprint {title}")
+        ax.set_xlabel('bin')
+        ax.set_ylabel('Neuron above decending')
+        
+        fig.tight_layout()
+        
+        return fig, ax
+
+    def autolabel(self, rects, ax):
+        #Attach a text label above each bar in *rects*, displaying its height
+        for rect in rects:
+            height = rect.get_height()
+            ax.annotate('{}'.format(height),
+                        xy=(rect.get_x() + rect.get_width() / 2, height),
+                        xytext=(0, 3),  # 3 points vertical offset
+                        textcoords="offset points",
+                        ha='center', va='bottom')
+    
+    def plt_bar_sig_neurons(self, row, trials, title):
+        # get necessary data
+        labels = ["all trials", 
+                "block {}%".format(row["rw block 1"]), 
+                "block {}%".format(row["rw block 2"]), 
+                "block {}%".format(row["rw block 3"])
+                ]
+        bevore = [row[f"{trials} bevore"], row[f"1 {trials} bevore"],row[f"2 {trials} bevore"],row[f"3 {trials} bevore"]]
+        across = [row[f"{trials} across"], row[f"1 {trials} across"],row[f"2 {trials} across"],row[f"3 {trials} across"]]
+        after = [row[f"{trials} after"], row[f"1 {trials} after"],row[f"2 {trials} after"],row[f"3 {trials} after"]]
+        combined = [row[f"{trials} all"], row[f"1 {trials} all"],row[f"2 {trials} all"],row[f"3 {trials} all"]]
+        # for ploting
+        x = np.arange(len(labels))  # the label locations
+        width = 0.2  # the width of the bars
+
+        fig, ax = plt.subplots()
+        #plot bar for all events
+        rects1 = ax.bar(x-3*(width/2), combined, width, label='combined')
+        rects2 = ax.bar(x-(width/2), bevore, width, label='bevore event')
+        rects3 = ax.bar(x+(width/2), across, width, label='across event')
+        rects4 = ax.bar(x+3*(width/2), after, width, label='after event')
+        # Add some text for labels, title and custom x-axis tick labels, etc.
+        ax.set_ylabel('Count Neurons')
+        ax.set_title(title)
+        ax.set_xticks(x)
+        ax.set_xticklabels(labels)
+        ax.legend()
+        # add labels
+        self.autolabel(rects1,ax)
+        self.autolabel(rects2,ax)
+        self.autolabel(rects3,ax)
+        self.autolabel(rects4,ax)
+
+        fig.tight_layout()
+
+        return fig,ax
+
 
  # Plot and Save all figures =======================================
     def save_plot(self, name):
@@ -597,7 +1001,7 @@ class SpikesSDA():
         # prepare necessary data arrays
         spiketimes_data_ar, reward_aligned_ar, binned, mean_ar, percentil_ar = self.get_bootstrap_all_clusters(window, iterations, bins, 'reward')
         # get subselections
-        data_dict = self.get_all_bootstrap_subselections(spiketimes_data_ar, reward_aligned_ar, binned, mean_ar, percentil_ar,bins)
+        data_dict = self.get_all_bootstrap_subselections(spiketimes_data_ar, reward_aligned_ar,bins,binned,mean_ar,percentil_ar)
         
         # iterate over all sub dicts
         for key,value in data_dict.items():
