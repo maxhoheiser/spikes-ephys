@@ -10,3 +10,9 @@ kite_tutorial.ipynb
 .virtual_documents/kite_tutorial.ipynb.py
 .ipynb_checkpoints/pipeline-checkpoint.ipynb
 .ipynb_checkpoints/pipeline-checkpoint.ipynb
+*.ipynb_checkpoints*
+.ipynb_checkpoints
+**/*.ipynb_checkpoints/
+.ipynb_checkpoints/pipeline-checkpoint.ipynb
+.virtual_documents/spikes_eda.ipynb.py
+.ipynb_checkpoints/pipeline-checkpoint.ipynb
