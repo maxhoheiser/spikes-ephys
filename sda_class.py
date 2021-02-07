@@ -248,8 +248,8 @@ class SpikesSDA():
                                                                     )
         return self.data_dict
     
-    def load_info_df(self):
-        self.info_df = self.add_session_session_sig_info(self.data_dict,self.bins)
+    def load_info_df(self,sig_number=4):
+        self.info_df = self.add_session_session_sig_info(data_dict=self.data_dict,bins=self.bins,sig_number=sig_number)
         return self.info_df
 
 ##STAT ANALYSIS###############################################################################################################
@@ -516,7 +516,7 @@ class SpikesSDA():
         return info_df
 
 
-    def add_session_session_sig_info(self,data_dict,bins,info_df=False):
+    def add_session_session_sig_info(self,data_dict,bins,info_df=False,sig_number=4):
         if info_df == False:
             info_df = self.create_all_sessions_info_df()
         current_index = info_df.shape[0]+1
@@ -545,9 +545,9 @@ class SpikesSDA():
             #fingerprint = self.get_fingerprint(data,lower,upper,bins)
             fingerprint=data_dict[key]["fingerprint_per"]
             # before reward event [tot number, indeces]
-            before = np.where((fingerprint.loc[:,"bin 20":"bin 25"]>0).sum(axis=1)>=4)[0]
-            across = np.where((fingerprint.loc[:,"bin 23":"bin 27"]>0).sum(axis=1)>=4)[0]
-            after = np.where((fingerprint.loc[:,"bin 25":"bin 30"]>0).sum(axis=1)>=4)[0]
+            before = np.where((fingerprint.loc[:,"bin 20":"bin 25"]>0).sum(axis=1)>=sig_number)[0]
+            across = np.where((fingerprint.loc[:,"bin 23":"bin 27"]>0).sum(axis=1)>=sig_number)[0]
+            after = np.where((fingerprint.loc[:,"bin 25":"bin 30"]>0).sum(axis=1)>=sig_number)[0]
             # get intersecting values
             true_before = np.array([i for i in before if i not in np.concatenate((across,after))])
             true_after = np.array([i for i in after if i not in np.concatenate((before,across))])
@@ -577,9 +577,9 @@ class SpikesSDA():
                 #fingerprint = self.get_fingerprint(data,lower,upper,bins)
                 fingerprint=data_dict[key]["fingerprint_per"]
                 # get values
-                before = np.where((fingerprint.loc[:,"bin 20":"bin 25"]>0).sum(axis=1)>=4)[0]
-                across = np.where((fingerprint.loc[:,"bin 23":"bin 27"]>0).sum(axis=1)>=4)[0]
-                after = np.where((fingerprint.loc[:,"bin 25":"bin 30"]>0).sum(axis=1)>=4)[0]
+                before = np.where((fingerprint.loc[:,"bin 20":"bin 25"]>0).sum(axis=1)>=sig_number)[0]
+                across = np.where((fingerprint.loc[:,"bin 23":"bin 27"]>0).sum(axis=1)>=sig_number)[0]
+                after = np.where((fingerprint.loc[:,"bin 25":"bin 30"]>0).sum(axis=1)>=sig_number)[0]
                 # get intersecting values
                 true_before = np.array([i for i in before if i not in np.concatenate((across,after))])
                 true_after = np.array([i for i in after if i not in np.concatenate((before,across))])
@@ -822,7 +822,7 @@ class SpikesSDA():
 
         return fig,ax,im
 
-    def plt_neuron_fingerprint_all(self, data,title,fig=None,ax=None):
+    def plt_neuron_fingerprint_all(self, data,title,fig=None,ax=None,ylabel=False):
         if fig==None and ax==None:
             fig,ax= plt.subplots()
             no_details=True
@@ -847,10 +847,14 @@ class SpikesSDA():
             ax.legend()
         # x y labels
         ax.set_xlabel('bin')
-        ax.set_ylabel('Neuron above descending')
+        if ylabel==False:
+            ax.set_ylabel('Neuron above descending')
+        else:
+            ax.set_ylabel(ylabel)
 
         # set text
-        ax.set_title(f"{title}")
+        if title != False:
+            ax.set_title(f"{title}")
         
         
         fig.tight_layout()
@@ -1007,6 +1011,169 @@ class SpikesSDA():
         
         return fig,axs
 
+    def plt_neuron_fingerprint_summary_all_expanded(self,data_dict,info_df,bins,trials,title):
+        # create figure and axis
+        # gs = 1col x 2row
+        #------------------------
+        # gs0=gs[0]=2col x 1row
+        # ax1 | ax2
+        #-----------------------
+        # gs1=gs[1]=2col x 1row
+        # gs10=gs1[0]                | gs11=gs1[1]
+        # gs100=gs10[0]=4col x 1 row |
+
+
+        ## CREATE GRID & AXIS =========================
+        width=11
+        fig = plt.figure(figsize=(width,width*(3/5)))
+
+        #GRID 0# create main grid around all
+        gs = gridspec.GridSpec(ncols=1, nrows=2,
+                            #width_ratios=[1, 1],
+                            height_ratios=[1, 1],
+                            hspace=0.5#,wspace=0.2
+                                )
+        #GRID 0 row 1#
+        gs0 = gs[0].subgridspec(ncols=2, nrows=1,  )#wspace=0.3)
+        # add 0.0 axis
+        ax1 = fig.add_subplot(gs0[0])
+        # add 0.1 axis
+        ax2 = fig.add_subplot(gs0[1])
+
+        #GRID 0 row 2#
+        gs1 = gs[1].subgridspec(nrows=1, ncols=2,width_ratios=[1, 0.05],wspace=0.1)
+        #GRID 1 row
+        gs10 = gs1[0].subgridspec(nrows=2, ncols=1,wspace = 0.1, hspace=0.2)#,wspace = 0.1)
+        #GRID 2 -> 4 rows = 0per
+        gs100 = gs10[0].subgridspec(nrows=1, ncols=4,wspace = 0.1)#,wspace = 0.1)
+        #GRID 3 -> 4 rows = sigma
+        gs101 = gs10[1].subgridspec(nrows=1, ncols=4,wspace = 0.1)#,wspace = 0.1)
+
+        # add 11.0-11.5 axis
+        axs35 = list()
+        for i in range(4):
+            axs35.append(fig.add_subplot(gs100[0, i]))
+        # add 11.0-11.5 axis
+        axs79 = list()
+        for i in range(4):
+            axs79.append(fig.add_subplot(gs101[0, i]))
+
+        ims = list()
+
+        ## PLOT TO AXS ================================
+        # gernarate data
+        #gen labels and ticks
+        ticks=np.arange(0,bins+1,10)
+        labels=ticks.astype(str).tolist()
+        #data = data_dict[trials]["reward_alinged"]
+        #lower = data_dict[trials]["percentiles"][0]
+        #upper = data_dict[trials]["percentiles"][4]
+        #fingerprint = self.get_fingerprint(data,lower,upper,bins)
+        fingerprint = data_dict[trials]["fingerprint_per"]
+
+        # 1 Row =====================================================================
+
+        # axis 0.0 ========
+        _,ax1 = self.plt_bar_sig_neurons(info_df.loc[1,:],trials,"significant above", fig, ax1)
+
+        # axis 0.2 ========
+        _,ax2,im2 = self.plt_fingerprint_2d(fingerprint,'95th percentile',fig,ax2,"significant below vs above")
+        # set colorbar for axis 0.2
+        fig.colorbar(im2, ax=ax2, orientation='vertical')
+
+        # 2 Row =====================================================================
+
+        # axis 1.0 =======
+        _,axs35[0],im_ = self.plt_neuron_fingerprint_all(fingerprint.sort_values(by=['above'],ascending=False).iloc[:,0:50].values,"all",fig,axs35[0],ylabel="5th-90th perc." )
+        # set xticks adn labels
+        axs35[0].set_xticks(ticks)
+        axs35[0].set_xticklabels(labels)
+        plt.setp(axs35[0].get_xticklabels(), visible=False)
+        plt.setp(axs35[0].xaxis.get_label(), visible=False)
+        ims.append(im_)
+
+        # axis 1.1-1.4 ====
+        for block,ax in zip([1,2,3],axs35[1:4]):
+            # get data
+            key = f"block{block}_{trials}"
+            #data_ = data_dict[key]["reward_alinged"]
+            #lower_ = data_dict[key]["percentiles"][0]
+            #upper_ = data_dict[key]["percentiles"][4]
+            #fingerprint_ = self.get_fingerprint(data_,lower_,upper_,bins)
+            fingerprint_=data_dict[key]["fingerprint_per"]
+            data = fingerprint_.sort_values(by=['above'],ascending=False).iloc[:,0:50].values
+            # plot 
+            blocks = self.selected_trials_df['probability'].unique()
+            _,ax,im = self.plt_neuron_fingerprint_all(data,f"Block {blocks[block-1]}%",fig,ax,ylabel="5th-90th perc.")
+            # set xticks
+            ax.set_xticks(ticks)
+            # set xticklabels
+            ax.set_xticklabels(labels)
+            ims.append(im)
+
+
+        # clean up labels and ticks
+        # remove from all
+        for ax_ in axs35[1:]:
+                plt.setp(ax_.get_yticklabels(), visible=False)
+                plt.setp(ax_.yaxis.get_label(), visible=False)
+                plt.setp(ax_.xaxis.get_label(), visible=False)
+                plt.setp(ax_.get_xticklabels(), visible=False)
+        # remove x label from 1.0
+        #plt.setp(axs35[0].xaxis.get_label(), visible=False)
+
+        # 3 Row =====================================================================
+        fingerprint = data_dict[trials]["fingerprint_sig"]
+        # axis 1.0 =======
+        _,axs79[0],im_ = self.plt_neuron_fingerprint_all(fingerprint.sort_values(by=['above'],ascending=False).iloc[:,0:50].values,False,fig,axs79[0],ylabel="2 sigma")
+        # set xticks adn labels
+        axs79[0].set_xticks(ticks)
+        axs79[0].set_xticklabels(labels)
+        ims.append(im_)
+
+        # axis 1.1-1.4 ====
+        for block,ax in zip([1,2,3],axs79[1:4]):
+            # get data
+            key = f"block{block}_{trials}"
+            #data_ = data_dict[key]["reward_alinged"]
+            #lower_ = data_dict[key]["percentiles"][0]
+            #upper_ = data_dict[key]["percentiles"][4]
+            #fingerprint_ = self.get_fingerprint(data_,lower_,upper_,bins)
+            fingerprint_=data_dict[key]["fingerprint_sig"]
+            data = fingerprint_.sort_values(by=['above'],ascending=False).iloc[:,0:50].values
+            # plot 
+            blocks = self.selected_trials_df['probability'].unique()
+            _,ax,im = self.plt_neuron_fingerprint_all(data,False,fig,ax,ylabel="2 sigma")
+            # set xticks
+            ax.set_xticks(ticks)
+            # set xticklabels
+            ax.set_xticklabels(labels)
+            ims.append(im)
+
+        # add colorbar to 1.2
+        #clean ax6
+        cb_ax2 = fig.add_axes([0.848, 0.11, 0.009, 0.31])
+        cbar2 = fig.colorbar(ims[0], cax=cb_ax2, ticks=np.arange(np.min(data),np.max(data)+1))
+        cbar2.ax.set_yticklabels(['below', 'in', 'above'])
+        # add elgend to 1.4
+        axs79[3].legend()
+
+        # clean up labels and ticks
+        # remove from all
+        for ax_ in axs79[1:]:
+                plt.setp(ax_.get_yticklabels(), visible=False)
+                plt.setp(ax_.yaxis.get_label(), visible=False)
+                plt.setp(ax_.xaxis.get_label(), visible=False)
+        # remove x label from 1.0
+        #plt.setp(axs35[0].xaxis.get_label(), visible=False)
+
+
+        fig.suptitle(f"Neurons responding to {title}")
+
+        axs = [ax1,ax2]+axs35+axs79
+        return fig, axs
+
+    
     def plt_fingerprint_overfiew_trial_selection_individual(self,data_dict,info_df,bins,trials,title,conf_int="90percentil"):
 
         if conf_int=="90percentil":
@@ -1073,10 +1240,10 @@ class SpikesSDA():
             file_name = file_name = name+f"_{self.get_cluster_name_from_neuron_idx(cluster)}"
             self.save_fig(file_name,(self.plt_compare_random_fixed_sigma(cluster,window,bins,reward_aligned_ar,mean_ar,var_ar)))
 
-    def generate_plots(self,window,iterations,bins,individual=False,load=True,reload=False):
-        if load:
+    def generate_plots(self,window,iterations,bins,individual=False,reload_data_dict=True,reload_spikes_ar=False):
+        if reload_data_dict:
             # prepare necessary data arrays
-            self.load_data_dict(window,iterations,bins,reload)
+            self.load_data_dict(window,iterations,bins,reload_spikes_ar)
             self.load_info_df()
 
         

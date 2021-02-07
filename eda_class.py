@@ -261,11 +261,10 @@ class SpikesEDA():
  #Plotting ===================================================================================================================
 
     # plot histogram of trial times & normal fitted cuve
-    def plt_trial_hist_and_fit(self, df):
+    def plt_trial_hist_and_fit(self, df, bins):
         fig, ax = plt.subplots()
         # plot histogramm
-        num_bins = 50
-        n, bins, patches = ax.hist(df, num_bins, density=1)
+        n, bins, patches = ax.hist(df, bins, density=1)
         # add a 'best fit' line
         mean = df.mean()
         std = df.std()
@@ -366,9 +365,13 @@ class SpikesEDA():
         for group, frame in self.selected_trials_df.groupby('probability',sort=False):
             ax.hlines(frame.index[0], x_min, x_max, colors='r',linestyle='--',linewidths=(1,))
             ax.text(ax.get_xlim()[1]-14000, frame.index[0]+2, f"{group}%", fontsize=10)
-
-        ax.set_xlabel('Trial Length [20kHz]')
-        ax.set_ylabel('Probability density')
+        # clean up axis labels and ticks
+        ticks=np.arange(0,(np.concatenate(spikes_per_trial).ravel()).max(),20000,dtype=int)
+        labels=((ticks/20000).astype(int)).astype(str).tolist()
+        ax.set_xticks(ticks)
+        ax.set_xticklabels(labels)
+        ax.set_xlabel('Trial Length [s]')
+        ax.set_ylabel('Trial')
 
         #ax.set_title(f"Spike Train of Trials for Cluster: {cluster_name}")
         # Tweak spacing to prevent clipping of ylabel
@@ -378,7 +381,7 @@ class SpikesEDA():
 
 
     # plot spike trains and histogram to subplots
-    def plt_spike_train_hist(self, cluster, selected_trials_df, event, window, fig=None, ax=[None, None], title=None):
+    def plt_spike_train_hist(self, cluster, selected_trials_df, event, window, bins, fig=None, ax=[None, None], title=None):
         """
         def:    plot the spike train around event (0) for all trials stacked on each other for event +/- delta
                 and the histogram for the count of spikes over all trials
@@ -386,6 +389,7 @@ class SpikesEDA():
                 selected_trials= DataFrame::dataframe with all the trials to plot
                 event= string::event in question (must be in trials_df as column name)
                 window = integer::half window width in milli seconds
+                bins = number of bins for histogram
                 fig = pyplot subfigure, if None => will create one
                 ax = dict of at least two pyplot subfigure axis, if None => will create one
                 title = alternative subtitle
@@ -469,10 +473,9 @@ class SpikesEDA():
         ax[0].set_title(event, color='red', fontsize=8)
 
         ## plot histogram===========================
-        num_bins = 60
         # draw histogram
         if 'hist_sp' in locals():
-            ax[1].hist(hist_sp, bins=num_bins)
+            ax[1].hist(hist_sp, bins=bins)
         # draw red line at event
         ax[1].axvline(x=0,ymin=0,ymax=1,c="red",linewidth=0.5)
         # naming y axis
@@ -500,7 +503,7 @@ class SpikesEDA():
             hist_sp = 0
         return fig, ax, hist_sp 
 
-    def _test_plt_spike_train_hist(self, cluster, selected_trials, event, window, fig=None, ax=[None, None], title=None):
+    def _test_plt_spike_train_hist(self, cluster, selected_trials, event, window, bins, fig=None, ax=[None, None], title=None):
         """
         def:    plot the spike train around event (0) for all trials stacked on each other for event +/- delta
                 and the histogram for the count of spikes over all trials
@@ -508,6 +511,7 @@ class SpikesEDA():
                 selected_trials= DataFrame::dataframe with all the trials to plot
                 event= string::event in question (must be in trials_df as column name)
                 window = integer::half window width in milli seconds
+                bins = number of bins for histogram
                 fig = pyplot subfigure, if None => will create one
                 ax = dict of at least two pyplot subfigure axis, if None => will create one
                 title = alternative subtitle
@@ -573,9 +577,8 @@ class SpikesEDA():
         ax.set_title(event, color='red', fontsize=8)
 
         ## plot histogram===========================
-        num_bins = 60
         # draw histogram
-        ax2.hist(hist_sp, bins=num_bins)
+        ax2.hist(hist_sp, bins=bins)
         # draw red line at event
         ax2.axvline(x=0,ymin=0,ymax=1,c="red",linewidth=0.5)
         # naming y axis
@@ -602,7 +605,7 @@ class SpikesEDA():
         return fig, ax
         
 
-    def plt_spike_train_hist_all_events(self, cluster, selected_trials_df, event, window, fig=None, ax=[None, None], title=None):
+    def plt_spike_train_hist_all_events(self, cluster, selected_trials_df, event, window, bins, fig=None, ax=[None, None], title=None):
         spikes = self.spikes_df[self.spikes_df.loc[:]['cluster'] == cluster]['spike_times']
         trials = selected_trials_df[event]
         delta = window*20
@@ -692,10 +695,10 @@ class SpikesEDA():
         #ax[0].set_title(event, color='red', fontsize=8,rotation='vertical')
 
         ## plot histogram===========================
-        num_bins = 50
+    
         # draw histogram
         if 'hist_sp' in locals():
-            ax[1].hist(hist_sp, bins=num_bins)
+            ax[1].hist(hist_sp, bins=bins)
         # draw red line at event
         ax[1].axvline(x=0,ymin=0,ymax=1,c="red",linewidth=0.5)
         # naming y axis
@@ -723,7 +726,7 @@ class SpikesEDA():
         return fig, ax
 
     # plot spike train, histogram for bin and histogram for trials
-    def plt_spike_train_hist_bar(self, cluster, selected_trials, event, window, fig=None, ax=[None, None, None], title=None):
+    def plt_spike_train_hist_bar(self, cluster, selected_trials, event, window, bins, fig=None, ax=[None, None, None], title=None):
         # create necessary variables
         cluster_df = self.spikes_df[self.spikes_df.loc[:]['cluster'] == cluster]['spike_times']
         trials = selected_trials[event]
@@ -800,9 +803,8 @@ class SpikesEDA():
         ax1.set_title(event, color='red', fontsize=8)
 
         ## plot histogram spikes ===========================
-        num_bins = 60
         # draw histogram
-        ax2.hist(hist_sp, bins=num_bins, color="tab:blue")
+        ax2.hist(hist_sp, bins=bins, color="tab:blue")
         # draw red line at event
         ax2.axvline(x=0,ymin=0,ymax=1,c="red",linewidth=0.5)
         # naming y axis
@@ -864,16 +866,17 @@ class SpikesEDA():
         
 
 
-    def generate_plots(self):
+    def generate_plots(self,window,bins):
+        """
         #hist and fit
         print("plot hist and fit")
-        fig,ax=self.plt_trial_hist_and_fit(self.selected_trials_df.loc[:,'length'])
+        fig,ax=self.plt_trial_hist_and_fit(self.selected_trials_df.loc[:,'length'], bins)
         self.save_fig('hist_fit',fig)
         
         # trial length
         print("trial lengt")
-        fig,ax=plt.figure()
-        fig.plot(self.selected_trials_df.loc[:,'length'])
+        fig,ax=plt.subplots()
+        ax.plot(self.selected_trials_df.loc[:,'length'])
         ax.set_ylabel('length [ms]')
         ax.set_xlabel('trial')
         self.save_fig('trial_length',fig)
@@ -887,27 +890,27 @@ class SpikesEDA():
         print("inter spike interval -> all")
         start = self.selected_trials_df.loc[0,'start']
         end = self.selected_trials_df.iloc[-1]['end']
-
+        
         for cluster, row in self.clusters_df.loc[self.clusters_df['group']=='good'].iterrows():
             a = row['spikes']
             fig,ax=self.plot_single_neuron_isis(a[np.logical_and(a>=start, a<=end)],cluster)
             self.save_fig('isi_'+str(cluster),fig)
-            
+        
         # spike trains
         print("spike trains -> all")
         for cluster in self.clusters_df.loc[self.clusters_df['group']=='good'].index:
             fig,ax=self.plt_spike_train(cluster)
             self.save_fig('spk_train_'+str(cluster),fig)
-            
+        """    
         # spike train + hist all trials
         print("cue aligned - spike trains + histogram -> all")
         for cluster in self.clusters_df.index:
-            fig,ax,_ = self.plt_spike_train_hist_all_events(cluster, self.selected_trials_df, 'cue', 2000)
+            fig,ax = self.plt_spike_train_hist_all_events(cluster, self.selected_trials_df, 'cue', window, bins)
             self.save_fig('spk_train_hist_all-events_'+str(cluster),fig)
         
+        print("reward algined - spike trains + histogram -> all")
         for cluster in self.clusters_df.index:
-            print("reward algined - spike trains + histogram -> all")
-            fig,ax,_ = self.plt_spike_train_hist_all_events(cluster, self.selected_trials_df, 'reward', 2000)
+            fig,ax = self.plt_spike_train_hist_all_events(cluster, self.selected_trials_df, 'reward', window, bins)
             self.save_fig('spk_train_hist_all-events_reward-centered_'+str(cluster),fig)
         
         # plott reward at specific trials
@@ -920,19 +923,21 @@ class SpikesEDA():
             gamble='left'
         
         #spike train + hist reward specific events
+        trials_subselctor_list = []
+        filenames_subselect_list = []
         # rewarded ===
         # reward right
         print("reward + gamble - spike trian + histogram -> all")
         selected_trials = self.selected_trials_df[(self.selected_trials_df[gamble])&(self.selected_trials_df['reward_given'])]
         for cluster in self.clusters_df.index:
-            fig,ax,_ = self.plt_spike_train_hist(cluster, selected_trials, 'reward', 2000)
+            fig,ax,_ = self.plt_spike_train_hist(cluster, selected_trials, 'reward', 2000,bins)
             self.save_fig('spk_train_hist_gamble_reward_'+str(cluster),fig)
         
         # reward left
         print("reward + safe - spike trian + histogram -> all")
         selected_trials = self.selected_trials_df[(self.selected_trials_df[save])&(self.selected_trials_df['reward_given'])]
         for cluster in self.clusters_df.index:
-            fig,ax,_ = self.plt_spike_train_hist(cluster, selected_trials, 'reward', 2000)
+            fig,ax,_ = self.plt_spike_train_hist(cluster, selected_trials, 'reward', 2000, bins)
             self.save_fig('spk_train_hist_save_reward_'+str(cluster),fig)
         
         # not rewarded ===
@@ -940,14 +945,14 @@ class SpikesEDA():
         print("no-reward + gamble - spike trian + histogram -> all")
         selected_trials = self.selected_trials_df[(self.selected_trials_df[gamble])&(np.invert(self.selected_trials_df['reward_given']))]
         for cluster in self.clusters_df.index:
-            fig,ax,_ = self.plt_spike_train_hist(cluster, selected_trials, 'reward', 2000)
+            fig,ax,_ = self.plt_spike_train_hist(cluster, selected_trials, 'reward', 2000, bins)
             self.save_fig('spk_train_hist_gamble_no-reward_'+str(cluster),fig)
         
         # safe + norw
         print("no-reward + safe - spike trian + histogram -> all")
         selected_trials = self.selected_trials_df[(self.selected_trials_df[save])&(np.invert(self.selected_trials_df['reward_given']))]
         for cluster in self.clusters_df.index:
-            fig,ax,_ = self.plt_spike_train_hist(cluster, selected_trials, 'reward', 2000)
+            fig,ax,_ = self.plt_spike_train_hist(cluster, selected_trials, 'reward', 2000, bins)
             self.save_fig('spk_train_hist_save_no-reward_'+str(cluster),fig)
             
         
@@ -955,19 +960,19 @@ class SpikesEDA():
         print("reward - spike trian + histogram -> all")
         selected_trials = self.selected_trials_df[self.selected_trials_df['reward_given']]
         for cluster in self.clusters_df.index:
-            fig,ax,_ = self.plt_spike_train_hist(cluster, selected_trials, 'reward', 2000)
+            fig,ax,_ = self.plt_spike_train_hist(cluster, selected_trials, 'reward', 2000, bins)
             self.save_fig('spk_train_hist_reward_'+str(cluster),fig)
             
         # all right
         print("gamble - spike trian + histogram -> all")
         selected_trials = self.selected_trials_df[self.selected_trials_df[gamble]]
         for cluster in self.clusters_df.index:
-            fig,ax,_ = self.plt_spike_train_hist(cluster, selected_trials, 'reward', 2000)
+            fig,ax,_ = self.plt_spike_train_hist(cluster, selected_trials, 'reward', 2000, bins)
             self.save_fig('spk_train_hist_gamble_'+str(cluster),fig)
 
         # all left
         print("safe - spike trian + histogram -> all")
         selected_trials = self.selected_trials_df[self.selected_trials_df[save]]
         for cluster in self.clusters_df.index:
-            fig,ax,_ = self.plt_spike_train_hist(cluster, selected_trials, 'reward', 2000)
+            fig,ax,_ = self.plt_spike_train_hist(cluster, selected_trials, 'reward', 2000, bins)
             self.save_fig('spk_train_hist_save_'+str(cluster),fig)

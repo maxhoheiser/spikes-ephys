@@ -233,12 +233,14 @@ class SyncPhenosys():
         return df 
 
     # create combined dataframe
-    def combine_dataframes(self, align=False):
+    def combine_dataframes(self, rows_missing_ttl=False, align=False, ):
 
         ttl_combined = self.ttl_signals['channel 1'].copy()
         ttl_combined.columns=(['TTL Start', 'TTL Length', 'TTL Event'])
 
-        for row in self.rows_missing_ttl:
+        if rows_missing_ttl==False:
+            rows_missing_ttl = self.rows_missing_ttl
+        for row in rows_missing_ttl:
             ttl_combined = self.insert_row(row, ttl_combined, np.nan, column='all')
 
         ttl_combined.reset_index(inplace=True, drop=True)

@@ -22,6 +22,9 @@ class BehaviorAnalysis():
         self.all_trials_df = sync_obj.all_trials_df
         self.good_trials_df = sync_obj.good_trials_df
 
+        # deselct not selected trials
+        # reset
+        self.good_trials_df['select'] = True
         for a,b in deselect_trials:
             if b == 'end':
                 self.good_trials_df.loc[a:,'select'] = False
@@ -75,3 +78,11 @@ class BehaviorAnalysis():
         plt.xlabel('trial')
         plt.show()
         
+        # plot spike times
+    def plt_trial_length(self, trials_df):
+        fig, ax = plt.subplots()
+        ax.plot(trials_df.loc[trials_df.loc[:,'select'],'length'])
+        labels=ax.get_xticklabels()
+        ax.set_xlbael("trial")
+        ax.set_ylabel("length [ms]]")
+        return fig,ax
