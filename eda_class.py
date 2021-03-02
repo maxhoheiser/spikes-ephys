@@ -5,6 +5,17 @@
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
+import matplotlib as mpl
+mpl.style.use('seaborn')
+plt.rcParams['axes.facecolor'] = '#f0f4f7'
+plt.rc('legend', frameon=True,fancybox=True, framealpha=1)
+blue = '#4C72B0'
+green = '#55A868'
+red = '#C44E52'
+purple = '#8172B2'
+yellow = '#CCB974'
+lightblue = '#64B5CD'
+
 import csv
 import scipy.stats as st
 import platform
@@ -21,7 +32,7 @@ spec = [
 ]
 """
 
-
+default = [6.4, 4.8]
 
 # class ###################################################################################################################
 #@jitclass(spec)
@@ -40,6 +51,8 @@ class SpikesEDA():
         self.spikes_per_trial_ar = self.gen_spike_per_trial_matrix()
         self.spikes_per_cluster_ar = self.gen_spike_per_cluster_matrix()
         #self.randomized_bins_ar = self.get_randomized_samples(200, 1000)
+
+
 
     # load files from kilosort & behavior files
     def load_files(self):
@@ -284,8 +297,8 @@ class SpikesEDA():
         ax.plot(trials_df.loc[trials_df.loc[:,'select'],'length'])
 
     # plot all spikes histogram
-    def plt_all_cluster_spikes_hist_absolt(self):
-        fig, ax = plt.subplots()
+    def plt_all_cluster_spikes_hist_absolt(self,figsize=default):
+        fig, ax = plt.subplots(1,1,figsize=figsize)
 
         (self.clusters_df.loc[self.clusters_df['group']=='good','n_spikes']).hist(alpha=0.6,label='number of spikes for good clusters')
         (self.clusters_df.loc[self.clusters_df['group']=='mua','n_spikes']).hist(alpha=0.4,label='number of spikes for MUA clusters')
@@ -300,8 +313,8 @@ class SpikesEDA():
         
         return fig, ax
 
-    def plt_all_cluster_spikes_hist(self):
-        fig, ax = plt.subplots()
+    def plt_all_cluster_spikes_hist(self, figsize=default):
+        fig, ax = plt.subplots(1,1,figsize=figsize)
 
         trial_length_samplingrate = self.all_trials_df["end"].max()
         trial_length_seconds = trial_length_samplingrate / 20000
@@ -313,10 +326,10 @@ class SpikesEDA():
         (data.loc[data['group']=='mua','frequency']).hist(alpha=0.4,label='MUA clusters')
         (data.loc[data['group']=='noise','frequency']).hist(label='noise clusters')
 
-        ax.legend()
+        ax.legend(prop={'size': 14})
 
         ax.legend()
-        ax.set_xlabel('distribution of spikes frequency across cluster types')
+        ax.set_xlabel('bin')
         ax.set_ylabel('cum count')
         #ax.set_title('number of spikes for specific clusters')
         
@@ -352,19 +365,19 @@ class SpikesEDA():
 
     #spike trains========================
     # plot spike trains for all trials
-    def plt_spike_train(self, cluster_name):
-        fig, ax = plt.subplots()
+    def plt_spike_train(self, cluster_name, figsize=default):
+        fig, ax = plt.subplots(1,1,figsize=figsize)
         neuron_idx = self.get_neuron_idx_from_cluster_name(cluster_name)
         spikes_per_trial = self.spikes_per_trial_ar[neuron_idx]
 
         # plot spike trains
-        ax.eventplot(spikes_per_trial, color=".2")        
+        ax.eventplot(spikes_per_trial,color='k',alpha=0.5)        
         #plot prob change
-        x_min = -100
+        x_min = 0#-100
         x_max= ax.get_xlim()[1]
         for group, frame in self.selected_trials_df.groupby('probability',sort=False):
-            ax.hlines(frame.index[0], x_min, x_max, colors='r',linestyle='--',linewidths=(1,))
-            ax.text(ax.get_xlim()[1]-14000, frame.index[0]+2, f"{group}%", fontsize=10)
+            ax.hlines(frame.index[0], x_min, x_max-5000, colors=red,linestyle='--',linewidths=(1.5,))
+            ax.text(x_max-15000, frame.index[0]+2, f"{group*100}%", fontsize=11)
         # clean up axis labels and ticks
         ticks=np.arange(0,(np.concatenate(spikes_per_trial).ravel()).max(),20000,dtype=int)
         labels=((ticks/20000).astype(int)).astype(str).tolist()
@@ -372,6 +385,13 @@ class SpikesEDA():
         ax.set_xticklabels(labels)
         ax.set_xlabel('Trial Length [s]')
         ax.set_ylabel('Trial')
+
+        #set lims
+        # x
+        ax.set_xlim([0,x_max-3000])
+        #y
+        y_max= ax.get_ylim()[1]
+        ax.set_ylim([-2,y_max])
 
         #ax.set_title(f"Spike Train of Trials for Cluster: {cluster_name}")
         # Tweak spacing to prevent clipping of ylabel
@@ -381,7 +401,10 @@ class SpikesEDA():
 
 
     # plot spike trains and histogram to subplots
-    def plt_spike_train_hist(self, cluster, selected_trials_df, event, window, bins, fig=None, ax=[None, None], title=None):
+    def plt_spike_train_hist(self, cluster, selected_trials_df, event, 
+                            window, bins, fig=None, ax=[None, None], figsize=default,
+                            title=None,
+                            alpha=1):
         """
         def:    plot the spike train around event (0) for all trials stacked on each other for event +/- delta
                 and the histogram for the count of spikes over all trials
@@ -401,11 +424,11 @@ class SpikesEDA():
 
         # create plot and axis if none is passed
         if any(i==None for i in ax)or fig==None:
-            fig, ax = plt.subplots(nrows=2, ncols=1, sharex=True, gridspec_kw={'hspace': 0})
+            fig, ax = plt.subplots(nrows=2, ncols=1, sharex=True, gridspec_kw={'hspace': 0},figsize=figsize)
 
         # loop that iterats trough all indeces in trial df
         y=0
-        prop = selected_trials_df.iloc[0]['probability']
+        prop = 'x'
         prop_li = []
         # get x upper lim
 
@@ -426,7 +449,7 @@ class SpikesEDA():
                 # iterate trough all elements of np array
             for col in ar:
                 ## plot spike train=========================
-                ax[0].plot([col, col], ypos, 'k-', linewidth=0.8)
+                ax[0].plot([col, col], ypos, 'k-', linewidth=0.8, alpha=alpha)
 
             # plot probability
             current_prop = selected_trials_df.loc[row]['probability']
@@ -440,11 +463,11 @@ class SpikesEDA():
         #x_text = delta*2#-2500       
         #ax[0].text(x_text, 0+2, f"{selected_trials_df.iloc[0]['probability']}%", fontsize=10)
         for po, yp in prop_li:
-            ax[0].hlines(yp, -delta, delta, colors='r',linestyle='--',linewidths=0.8)
-            ax[0].text(delta+400, yp-4, f"{po*100}%", fontsize=10)#, colors='r')
+            ax[0].hlines(yp, -delta, delta, colors=red,linestyle='--',linewidths=1.5)
+            ax[0].text(delta+400, yp-4, f"{po*100}%", fontsize=11)#, colors=red)
 
         ## traw red line at event ==============
-        ax[0].axvline(x=0,ymin=0,ymax=1,c="red",linewidth=0.5)
+        ax[0].axvline(x=0,ymin=0,ymax=1,c=red,linewidth=1.5)
         # spike train y lable
         ax[0].set_ylabel('Trial')
 
@@ -470,14 +493,14 @@ class SpikesEDA():
         # turn of labels on shared x axis only ticks
         plt.setp(ax[0].get_xticklabels(), visible=False)
         # write event
-        ax[0].set_title(event, color='red', fontsize=8)
+        ax[0].set_title(event, color=red, fontsize=12)
 
         ## plot histogram===========================
         # draw histogram
         if 'hist_sp' in locals():
-            ax[1].hist(hist_sp, bins=bins)
+            ax[1].hist(hist_sp, color=blue, alpha=0.6, bins=bins, rasterized=True)
         # draw red line at event
-        ax[1].axvline(x=0,ymin=0,ymax=1,c="red",linewidth=0.5)
+        ax[1].axvline(x=0,ymin=0,ymax=1,c=red,linewidth=1.5)
         # naming y axis
         ax[1].set_ylabel('Spike Count')
         # set x ticks to seconds

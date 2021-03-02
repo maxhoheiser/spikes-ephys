@@ -8,6 +8,8 @@ import os
 import sys
 import platform
 import datetime
+from pathlib import Path
+
 
 class SyncPhenosys():
     """[# synchronisation class for Phenosys Behavior Recording and Neuron Electrophysiology Recording]
@@ -456,8 +458,12 @@ class SyncPhenosys():
     # get all trials including wheel not stopping and 
 
 
-
-
-
-
+    def save_fig(self, name, fig):
+        folder = self.folder+"/figures/all_figures"
+        Path(folder).mkdir(parents=True, exist_ok=True)
+        #try:
+        #    fig.savefig(folder+"/"+name+'.png',dpi=200, format='png', bbox_inches='tight')
+        #except:
+        #    fig[0].savefig(folder+"/"+name+'.png',dpi=200, format='png', bbox_inches='tight')
+        fig.savefig(folder+"/"+name+'.png',dpi=200, format='png', bbox_inches='tight')
 

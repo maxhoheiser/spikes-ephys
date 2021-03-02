@@ -14,7 +14,6 @@ from pylatex import Document, Section, Subsection, Command, Package, NewPage, Lo
 from pylatex.utils import italic, NoEscape
 
 
-
 # class ###################################################################################################################
 class SpikesReport():
     def __init__(self, spikes_obj):
@@ -32,7 +31,6 @@ class SpikesReport():
         self.spikes_per_trial_ar = spikes_obj.spikes_per_trial_ar
 
         #self.randomized_bins_ar = self.get_randomized_samples(200, 1000)
-
 
 # Save all & Create Report ===================================================================================================
    
