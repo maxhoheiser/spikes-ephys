@@ -52,59 +52,296 @@ class BehaviorAnalysis():
         self.selected_trials_df.reset_index(drop=True,inplace=True)
 
 
-    def get_wheel_and_resp(self):
-        wheel = []
-        response = []
-        working = self.combined.copy()
+
+
+    # Behavior Plot Gauss Smoothed ============================================================================================================
+
+    def get_behavior_df(self,fwhm=4):
+        working = self.all_trials_df.copy()
         working.reset_index(inplace=True)
-        for index, row in working.iterrows():
-            if index+4 == working.shape[0]:
-                break 
-            if (row['CSV Event'] == 'start') & ( (working.loc[index+1,'CSV Event'])=='wheel not stopping'):
-                wheel.append(1)
-                response.append(0)
-            elif (row['CSV Event'] == 'start') & ( (working.loc[index+4,'CSV Event']) == 'no response in time'):
-                response.append(1)
-                wheel.append(0)
-            elif (row['CSV Event'] == 'start') and ( ((working.loc[index+1,'CSV Event'])!='wheel not stopping') or  ((working.loc[index+4,'CSV Event']) != 'no response in time') ):
-                wheel.append(0)
-                response.append(0)
+        if self.gamble_side=='right':
+            gamble_side = 'right'
+            safe_side = 'left'
+        else:
+            gamble_side = 'left'
+            safe_side = 'right'
+            
+        behav_df = pd.DataFrame({'wheel':(working['event']=='wheel not stopping').astype(int), 
+                                'resp':(working['event']=='no response in time').astype(int),
+                                'gamble_rw':(working['event']==f"{gamble_side}_rw").astype(int),
+                                'gamble_norw':(working['event']==f"{gamble_side}_norw").astype(int),
+                                'safe_rw':(working['event']==f"{safe_side}_rw").astype(int),
+                                'safe_norw':(working['event']==f"{safe_side}_norw").astype(int),
+                                })
+
+        # get averaged occurance 
+        resp_rol = pd.DataFrame(behav_df['resp'].rolling(window=10).mean())
+        resp_rol.fillna(0, inplace=True)
+        behav_df[f"{'resp'}_rol"]=resp_rol
+        wheel_rol = pd.DataFrame(behav_df['wheel'].rolling(window=10).mean())
+        wheel_rol.fillna(0, inplace=True)
+        behav_df[f"{'wheel'}_rol"]=wheel_rol
+        # gamble
+        gamble_rw_rol = pd.DataFrame(behav_df['gamble_rw'].rolling(window=10).mean())
+        gamble_rw_rol.fillna(0, inplace=True)
+        gamble_norw_rol = pd.DataFrame(behav_df['gamble_norw'].rolling(window=10).mean())
+        gamble_norw_rol.fillna(0, inplace=True)
+        safe_rw_rol = pd.DataFrame(behav_df['safe_rw'].rolling(window=10).mean())
+        safe_rw_rol.fillna(0, inplace=True)
+        safe_norw_rol = pd.DataFrame(behav_df['safe_norw'].rolling(window=10).mean())
+        safe_norw_rol.fillna(0, inplace=True)
+        # normalize rol
+        gamble_max = (np.concatenate((gamble_rw_rol.values,gamble_norw_rol.values))).max()
+        gamble_rw_rol = gamble_rw_rol/gamble_max
+        gamble_norw_rol = gamble_norw_rol/gamble_max
+        #
+        safe_max = (np.concatenate((safe_rw_rol.values,safe_norw_rol.values))).max()
+        safe_rw_rol = safe_rw_rol/safe_max
+        safe_norw_rol = safe_norw_rol/safe_max
+        # add to df
+        behav_df[f"{'gamble_rw'}_rol"]=gamble_rw_rol
+        behav_df[f"{'gamble_norw'}_rol"]=gamble_norw_rol
+        behav_df[f"{'safe_rw'}_rol"]=safe_rw_rol
+        behav_df[f"{'safe_norw'}_rol"]=safe_norw_rol
         
-        self.behav_df = pd.DataFrame({'resp':response, 'wheel':wheel})
-        # add rolling average
-        resp_rol_df = pd.DataFrame(self.behav_df.resp.rolling(window=10).mean())
-        resp_rol_df.fillna(0, inplace=True)
-        wheel_rol_df = pd.DataFrame(self.behav_df.wheel.rolling(window=10).mean())
-        wheel_rol_df.fillna(0, inplace=True)
-        # add to dataframe
-        self.behav_df['resp_rol']=resp_rol_df.values
-        self.behav_df['wheel_rol']=wheel_rol_df.values
+        # get gaus smoothed
+        for column in ['resp_rol','wheel_rol','gamble_rw_rol','gamble_norw_rol','safe_rw_rol','safe_norw_rol']:
+            gaus = self.gauss_smooth(behav_df[column],fwhm=fwhm)
+            behav_df[f"{column[:-4]}_gaus"]=gaus
 
-        return self.behav_df
+        self.behavior_df=behav_df
+        return self.behavior_df
 
-    def plot_wheel_resp(self, wheel=True, resp=False, legend=False):
-        if not 'behav_df' in dir(self):
-            self.get_wheel_and_resp()
-        plt.figure(figsize=(9, 4))
-        if wheel:
-            plt.plot(self.behav_df.wheel_rol, label='wheel not stopping')
-        if resp:
-            plt.plot(self.behav_df.resp_rol, label='no response in time')
+    def fwhm2sigma(self,fwhm):
+        return fwhm / np.sqrt(8 * np.log(2))
+
+    def gauss_smooth(self,data,fwhm=4):
+        sigma = self.fwhm2sigma(fwhm)
+
+        x_vals= data.index.values
+        y_vals = np.ravel(data.values)
+
+        smoothed_vals = np.zeros(y_vals.shape)
+        for x_position in x_vals:
+            kernel = np.exp(-(x_vals - x_position) ** 2 / (2 * sigma ** 2))
+            kernel = kernel / sum(kernel)
+            smoothed_vals[x_position] = sum(y_vals * kernel)
+            
+        return smoothed_vals
+
+
+
+    def plot_wheel_resp(self, wheel=True, resp=False, legend=False, gauss=True, unique=True, fwhm=4, figsize=(9,6),loc=(0.015, 0.1)):
+        #if not 'behavior_df' in dir(self):
+        self.get_behavior_df(fwhm=fwhm)
+
+        fig,ax  = plt.subplots(1,1,figsize=figsize)
+        if gauss:
+            if wheel:
+                ax.plot(self.behavior_df.wheel_gaus, label='wheel not stp.',color=blue)
+            if resp:
+                ax.plot(self.behavior_df.resp_gaus, label='no resp.',color='k')
+        else:
+            if wheel:
+                ax.plot(self.behavior_df.wheel_rol, label='wheel not stp.',color=blue)
+            if resp:
+                ax.plot(self.behavior_df.resp_rol, label='no resp.',color='k')
+        if unique:
+            resp_uniqe_x=list()
+            wheel_uniqe_x=list()
+
+            for x,y in self.behavior_df.iterrows():
+                if y.resp != 0:
+                    resp_uniqe_x.append(x)
+                if y.wheel != 0:
+                    wheel_uniqe_x.append(x)
+            # plot unique lines
+            # wheel
+            ax.eventplot(wheel_uniqe_x,lineoffsets=1.1,linelengths=0.1,color=blue,linewidth=0.5)  #y_min=1.1,y_max=1.2
+            # resp
+            ax.eventplot(resp_uniqe_x,lineoffsets=-0.1,linelengths=0.1,color='k',linewidth=0.5) #y_min=-1.2,y_max=-1.1
+
+        # plot prob block changes
+        blocks = self.all_trials_df['probability'].unique()
+        for block in blocks:
+            occurance=(np.where(self.all_trials_df['probability']==block)[0][0])
+            ax.axvline(occurance,0,1,linestyle='-',color='k',linewidth=0.5,alpha=0.4)
+            ax.text(occurance-15, 1.35, f"{block*100}%")
+
         if legend:
-            plt.legend(loc=(0.02, 0.1))
-        plt.ylabel('rolling average (10)')
-        plt.xlabel('trial')
-        plt.show()
+            ax.legend(loc=loc)
+        ax.set_ylabel('Probability')
+        ax.set_xlabel('Trial')
+        # secondary axis
+        fig.text(0.48,1.02,"Block")
+
+        return fig,ax
+
+
+    def plt_side_behav(self,
+                        side,
+                        unique=True, 
+                        fwhm=4, 
+                        figsize=(9,6),
+                        legend=True
+                        ):
+        #if not 'behavior_df' in dir(self):
+        self.get_behavior_df(fwhm=fwhm)
+
+        fig,ax  = plt.subplots(1,1,figsize=figsize)
+
+        # plot gauss smooth propability
+        ax.plot(self.behavior_df[f"{side}_rw_gaus"], label='reward',color=green)
+        ax.plot(self.behavior_df[f"{side}_norw_gaus"], label='no-reward',color=red)
+
+        # plot unique lines
+        if unique:
+            rw=list()
+            norw=list()
+
+            for x,y in self.behavior_df.iterrows():
+                if y[f"{side}_rw"] != 0:
+                    rw.append(x)
+                if y[f"{side}_norw"] != 0:
+                    norw.append(x)
+            ax.eventplot(rw,lineoffsets=1.1,linelengths=0.1,color=green,linewidth=0.8)
+            ax.eventplot(norw,lineoffsets=-0.1,linelengths=0.1,color=red,linewidth=0.8)
+            
+        # plot prob block changes
+        blocks = self.all_trials_df['probability'].unique()
+        for block in blocks:
+            occurance=(np.where(self.all_trials_df['probability']==block)[0][0])
+            ax.axvline(occurance,0,1,linestyle='-',color='k',linewidth=0.5,alpha=0.4)
+            ax.text(occurance-15, 1.35, f"{block*100}%")
+
+        #ax.set_xlim=(-0.3,1.5)
+
+        if legend:
+            plt.legend(loc=1)
+        ax.set_ylabel('Probability')
+        ax.set_xlabel('Trial')
+        # secondary axis
+        fig.text(0.48,1.05,"Block")
+
+        return fig,ax
+
+    def plt_side_compare(self,
+                        reward,
+                        unique=True, 
+                        fwhm=4, 
+                        figsize=(9,6),
+                        legend=True
+                        ):
+        #if not 'behavior_df' in dir(self):
+        self.get_behavior_df(fwhm=fwhm)
+
+        fig,ax  = plt.subplots(1,1,figsize=figsize)
+
+        # plot gauss smooth propability
+        if reward:
+            key = 'rw'
+            label = 'reward'
+        else:
+            key = 'norw'
+            label = 'no-reward'
+
+        ax.plot(self.behavior_df[f"gamble_{key}_gaus"], label=f"gamble {label}",color=purple)
+        ax.plot(self.behavior_df[f"safe_{key}_gaus"], label=f"safe {label}",color=lightblue)
+
+        # plot unique lines
+        if unique:
+            rw=list()
+            norw=list()
+
+            for x,y in self.behavior_df.iterrows():
+                if y[f"gamble_{key}"] != 0:
+                    rw.append(x)
+                if y[f"safe_{key}"] != 0:
+                    norw.append(x)
+            ax.eventplot(rw,lineoffsets=1.1,linelengths=0.1,color=purple,linewidth=0.8)
+            ax.eventplot(norw,lineoffsets=-0.1,linelengths=0.1,color=lightblue,linewidth=0.8)
+            
+        # plot prob block changes
+        blocks = self.all_trials_df['probability'].unique()
+        for block in blocks:
+            occurance=(np.where(self.all_trials_df['probability']==block)[0][0])
+            ax.axvline(occurance,0,1,linestyle='-',color='k',linewidth=0.5,alpha=0.4)
+            ax.text(occurance-15, 1.35, f"{block*100}%")
+
+        #ax.set_xlim=(-0.3,1.5)
+
+        if legend:
+            plt.legend(loc=1)
+        ax.set_ylabel('Probability')
+        ax.set_xlabel('Trial')
+        # secondary axis
+        fig.text(0.48,1.02,"Block")
+
+        return fig,ax
         
         # plot spike times
     def plt_trial_length(self, trials_df):
         fig, ax = plt.subplots()
         ax.plot(trials_df.loc[trials_df.loc[:,'select'],'length'])
         labels=ax.get_xticklabels()
-        ax.set_xlbael("trial")
-        ax.set_ylabel("length [ms]]")
+        ax.set_xlbael("Trial")
+        ax.set_ylabel("Length [ms]]")
         return fig,ax
 
+
+    # Plot response Time =================================================================================================================
+    def plt_resp_time(self,figsize=(9,6),legend=True):
+        #if not 'behavior_df' in dir(self):
+        if self.gamble_side == 'right':
+            gamble='right'
+            safe='left'
+        else:
+            gamble='left'
+            safe='right'
+            
+        # gamble times    
+        df = self.all_trials_df.loc[self.all_trials_df[gamble]]
+        gamble_times = (df['reward']-df['openloop'])/20000
+        # safe times
+        df = self.all_trials_df.loc[self.all_trials_df[safe]]
+        safe_times = (df['reward']-df['openloop'])/20000
+
+
+        fig,ax  = plt.subplots(1,1,figsize=figsize)
+        #fig,ax = plt.subplots(1,1,figsize=set_size(0.8,size='xlong'))
+
+        # plot response time
+        ax.scatter(gamble_times.index.values,gamble_times.values,
+                facecolors='none', edgecolors=purple,marker='o',linewidths=1.5, s=30, 
+                label='gamble side'
+                )
+        ax.scatter(safe_times.index.values,safe_times.values,
+                facecolors='none', edgecolors=lightblue, marker='o',linewidths=1.5,  s=30, alpha=0.8, 
+                label='safe side'
+                )
+
+        ax.set_ylim([ax.get_ylim()[0],10])
+
+        # plot prob block changes
+        blocks = self.all_trials_df['probability'].unique()
+        for block in blocks:
+            occurance=(np.where(self.all_trials_df['probability']==block)[0][0])
+            ax.axvline(occurance,0,1,linestyle='-',color='k',linewidth=0.5,alpha=0.4)
+            ax.text(occurance-15, 10.6, f"{block*100}%")
+
+        if legend:
+            plt.legend(loc=2)
+        ax.set_ylabel('Time [s]')
+        ax.set_xlabel('Trial')
+        # secondary axis
+        fig.text(0.48,1.04,"Block")
+
+        return fig,ax
+
+
+
+
+    # Colormap Plots =================================================================================================================
 
     def convert_numeric(self, columns, df):
         for column in columns:

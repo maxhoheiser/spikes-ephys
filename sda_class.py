@@ -1959,6 +1959,7 @@ class SpikesSDA:
             self.load_data_dict(window, iterations, bins, reload_spikes_ar)
             self.load_info_df(sig_number=sig_number)
 
+        """
         # generate conf neuron plots ==================================
         # iterate over all sub dicts & safe all individual neurons - percentile
         for _, value in self.data_dict.items():
@@ -1987,7 +1988,7 @@ class SpikesSDA:
                 value["filename"] + "_90per",
                 clusters,
             )
-
+        """
         # iterate over all sub dicts & safe all individual neurons - variance
         for _, value in self.data_dict.items():
             if individual:
@@ -2014,7 +2015,7 @@ class SpikesSDA:
                 value["filename"] + "_2sigma",
                 clusters,
             )
-
+        """
         # gernerate neuron fingerprint plots ============================
         print(f"{_} fingerprint summary & individual -> all subselections")
         for trials, name in zip(
@@ -2053,7 +2054,7 @@ class SpikesSDA:
             self.plt_fingerprint_overfiew_trial_selection_individual(
                 self.data_dict, self.info_df, bins, trials, name, conf_int="2sigma"
             )
-
+        """
     def generate_fingerprint_plots(self,
                         window,
                         iterations,

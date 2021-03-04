@@ -180,10 +180,11 @@ def get_trial_length_dif(se):
     return length_df
 
 
-def plt_trial_length_dif(all_sessions_dict,outlier=False):
+def plt_trial_length_dif(all_sessions_dict,outlier=False,figsize=default):
     labels = []
+    lines = []
 
-    width = 8
+    width = 8#figsize[0] #8
     fig = plt.figure(constrained_layout=True,figsize=(width, width * (1 / 4)))
     gs = gridspec.GridSpec(ncols=2,
                             nrows=1,
@@ -203,20 +204,20 @@ def plt_trial_length_dif(all_sessions_dict,outlier=False):
         
     for ax in [ax1,ax2]:
         ax.set_xlabel("Trial")
-        ax.set_ylabel("trial length delta [ms]")
+        ax.set_ylabel("Trial length delta [ms]")
 
     # create legend in axis 3
-    plt.setp(ax3.get_xticklabels(), visible=False)
-    plt.setp(ax3.xaxis.get_label(), visible=False)
-    plt.setp(ax3.get_yticklabels(), visible=False)
-    plt.setp(ax3.yaxis.get_label(), visible=False)
+    plt.setp(ax2.get_xticklabels(), visible=False)
+    plt.setp(ax2.xaxis.get_label(), visible=False)
+    plt.setp(ax2.get_yticklabels(), visible=False)
+    plt.setp(ax2.yaxis.get_label(), visible=False)
     # hide frame
     ax2.axis('off')
 
     # create legend
-    pos1 = ax3.get_position() # get the original position 
+    pos1 = ax2.get_position() # get the original position 
     pos2 = [pos1.x0, pos1.y0, pos1.width, pos1.height] 
-    ax3.set_position(pos2)
+    ax2.set_position(pos2)
     leg = Legend(ax2, lines, labels,loc='center right')
     ax2.add_artist(leg)
 
@@ -265,8 +266,8 @@ def plt_fit_normdist(data,ax=False,norm_fit=True,figsize=[6.4,4.8]):
     title = "Normal distribution fitted to data \n(mu:%.2f, std:%.2f)" % (mu, std)
 
     # namings usw
-    ax.set_xlabel("bin count")
-    ax.set_ylabel("probability")
+    ax.set_xlabel("Bin count")
+    ax.set_ylabel("Probability")
     ax.legend() #prop={'size': 14}
     #ax.set_title(title)
     
@@ -327,16 +328,16 @@ def get_event_df(all_sessions_dict):
         
         event_dif_df.loc[event_dif_df.shape[0]+1,:] = [key,all_ev,dif_ev,round_up(per_ev,2)]+events_dif_cor
 
-        return event_dif_df
+    return event_dif_df
 
 
-def fingerprint_color_map(event_dif_df):
+def fingerprint_color_map(event_dif_df,figsize=default):
     x_labels = event_dif_df.iloc[:,4:].columns.values.tolist()
     y_labels = event_dif_df['session'].values.tolist()
 
     data = event_dif_df.iloc[:,4:].values.astype(float)
 
-    fig, ax = plt.subplots()
+    fig, ax = plt.subplots(1,1,figsize=figsize)
     #im = ax.imshow(data,norm=LogNorm())
 
     my_cmap = copy.copy(mpl.cm.get_cmap('viridis')) # copy the default cmap
@@ -369,6 +370,8 @@ def fingerprint_color_map(event_dif_df):
 
     #ax.set_title("Distribution of Event difference")
     #fig.colorbar(im)
+    ax.grid(False)
+
     fig.tight_layout()
     return fig,ax
 
@@ -464,5 +467,5 @@ def boxplot(df,columns,scatter=True,title=None,figsize=default):
             ax.plot(x, y, linestyle='',marker=next(marker),label=df.loc[row,'id'],markersize=10 )
     ax.set_ylabel('Trial')
     ax.set_title(title)
-    ax.legend(prop={'size': 12})
+    ax.legend() #prop={'size': 12}
     return fig,ax
