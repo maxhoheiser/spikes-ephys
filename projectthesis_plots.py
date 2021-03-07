@@ -35,6 +35,7 @@ from scipy.stats import chisquare
 from numba import njit
 
 from sync_class import SyncPhenosys
+from sync_class import SyncPybpod
 from eda_class import SpikesEDA
 from behavior_class import BehaviorAnalysis
 from sda_class import SpikesSDA
@@ -149,6 +150,31 @@ def load_session(session, missing_rows_ttl=[], lo_spikes=False, deselect_trials=
     else:
         print(f"{session} -> behavior")
         session_obj = LoaderClass(sync_obj,behavior_obj,None,None,None)
+    return session_obj
+
+
+def load_pb_session(session, pb_root, oe_root,lo_spikes=False):
+    """
+    Load a session of data analysis
+    Args:
+        session (string): name of the session == folder
+        pb_root (path): . 
+        oe_root (path): . 
+    Returns:
+        object: object of type LoaderClass with all specified subobjects
+    """
+    # load calss and set folder depending on platform
+    folder = get_session_folder(session)
+    sync_obj = SyncPybpod(session, pb_root, oe_root) 
+    if lo_spikes:
+        print(f"{session} -> sda")
+        #eda_obj = SpikesEDA(behavior_obj)
+        #sda_obj = SpikesSDA(eda_obj)
+        #report_obj = SpikesReport(sda_obj)
+        #session_obj = LoaderClass(sync_obj,behavior_obj,eda_obj,sda_obj,report_obj)
+    else:
+        print(f"{session} -> behavior")
+        session_obj = LoaderClass(sync_obj,None,None,None,None)
     return session_obj
 
 

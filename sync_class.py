@@ -9,7 +9,19 @@ import sys
 import platform
 import datetime
 from pathlib import Path
+from os import path
+import json 
 
+
+
+###########################################################################################################################################
+# Functions ======================================================================================================================
+
+
+
+
+ ###########################################################################################################################################
+ # Phenosys & Intan ========================================================================================================================
 
 class SyncPhenosys():
     """[# synchronisation class for Phenosys Behavior Recording and Neuron Electrophysiology Recording]
@@ -30,13 +42,13 @@ class SyncPhenosys():
         self.ttl_signals = self.ttl_create_ticks()
         self.ttl_event_dict=self.create_dict()
         self.ttl_info_channel = self.convert_ttl_to_event('channel '+str(info_channel))
-        self.csv = self.load_csv()
         self.rows_missing_ttl = rows_missing_ttl
+        self.csv = self.load_csv()
         self.combined_df = self.combine_dataframes()
         self.all_trials_df, self.good_trials_df =  self.get_trials()
 
 
- # Load & manipulate Intern binary Data ====================================================================
+  # Load & manipulate Intern binary Data ====================================================================
     # load neuron binary files to array
     def load_digitalin(self):
         with open(self.folder+'/electrophysiology/digitalin.dat', 'r') as f:
@@ -123,7 +135,7 @@ class SyncPhenosys():
         return self.ttl_signals[channel]
 
 
- # Load & manipulate Neuron binary Data ====================================================================
+  # Load & manipulate Neuron binary Data ====================================================================
     # convert to datetime format with ms
     def convert_to_datetime(self, excel_string):
         second = (excel_string-25569)*86400.0
@@ -206,7 +218,7 @@ class SyncPhenosys():
         return csv
 
 
- # Align and Find Symmetry =================================================================================
+  # Align and Find Symmetry =================================================================================
     # helper function to insert a nan value to rows missing
     def Insert_row(self, row_number, df, row_value, column='all'): 
         # Starting value of upper half 
@@ -458,12 +470,327 @@ class SyncPhenosys():
     # get all trials including wheel not stopping and 
 
 
-    def save_fig(self, name, fig):
-        folder = self.folder+"/figures/all_figures"
-        Path(folder).mkdir(parents=True, exist_ok=True)
-        #try:
-        #    fig.savefig(folder+"/"+name+'.png',dpi=200, format='png', bbox_inches='tight')
-        #except:
-        #    fig[0].savefig(folder+"/"+name+'.png',dpi=200, format='png', bbox_inches='tight')
-        fig.savefig(folder+"/"+name+'.png',dpi=200, format='png', bbox_inches='tight')
 
+ # Plotting ================================================================================================================================
+
+
+
+
+
+
+
+###########################################################################################################################################
+# PyBpod & OpenEphys ======================================================================================================================
+
+class SyncPybpod():
+    """[# synchronisation class for Phenosys Behavior Recording and Neuron Electrophysiology Recording]
+    """    
+    def __init__(self, session, pb_folder,oe_folder):
+        """[summary]
+
+        Args:
+            session ([type]): [description]
+            folder ([type]): [description]
+            channel_no (int, optional): [description]. Defaults to 6.
+            info_channel (int, optional): [description]in. Defaults to 1.
+        """        
+        self.session = session
+        self.folder = pb_folder
+        self.openephys_dir=oe_folder
+        self.pb_csv = self.load_bp_events()
+        self.pb_usersettings_dict = self.get_usersettings()
+        self.oe_events_df = self.load_oe_events()
+        self.oe_trials_df = self.extract_oe_events()
+        self.combined_df = self.get_sync()
+        self.all_trials_df = self.extract_trials()
+
+
+ # load data=================================================================================
+
+    def load_oe_events(self):
+        #define event folde
+        if platform.system() == 'Linux':
+            event_folder = self.openephys_dir+r"/events/Rhythm_FPGA-100.0/TTL_1"
+        elif platform.system() == 'Windows':
+            event_folder = self.openephys_dir+r"\events\Rhythm_FPGA-100.0\TTL_1"
+        elif platform.system() == 'Darwin': #macos
+            event_folder = self.openephys_dir+r"/events/Rhythm_FPGA-100.0/TTL_1"
+        
+        # load infos
+        channel_states_ar = np.load(path.join(event_folder,'channel_states.npy'))
+        channels_ar = np.load(path.join(event_folder,'channels.npy'))
+        #text_ar = np.load(path.join(event_folder,'text.npy'))
+        full_words = np.load(path.join(event_folder,'full_words.npy'))
+        timestamps_ar = np.load(path.join(event_folder,'timestamps.npy'))
+        # normalize
+        timestamps_nor_ar = timestamps_ar - timestamps_ar[0]
+        
+        # create array
+        oe_events_ar = np.zeros([timestamps_nor_ar.shape[0],5])
+        oe_events_ar[:,0]=timestamps_ar
+        oe_events_ar[:,1]=timestamps_nor_ar/30
+        oe_events_ar[:,2]=timestamps_nor_ar/30000
+        oe_events_ar[:,3]=channel_states_ar
+        oe_events_ar[:,4]=channels_ar
+        
+        # create dataframe
+        oe_events_df = pd.DataFrame(oe_events_ar,columns=["samplerate_absolut","ms_relativ","s_relativ","event","channel"])
+        #oe_events_df['ms_relativ'].round(2)
+        return oe_events_df
+
+    def extract_oe_events(self):
+        oe_sync_df = (self.oe_events_df.loc[np.logical_or(self.oe_events_df['channel']==1, self.oe_events_df['channel']==2)]).copy()
+        oe_sync_df.reset_index(inplace=True,drop=True)
+        oe_trials = []
+
+        trial=False
+        bnc1=-1
+        bnc2=-1
+        for row in  oe_sync_df.index.values[1:]:
+            # check bnc state
+            if oe_sync_df.loc[row,"channel"]==1:
+                bnc1=oe_sync_df.loc[row,"event"]
+            if oe_sync_df.loc[row,"channel"]==2:
+                bnc2=oe_sync_df.loc[row,"event"]
+            # 1 2 = start
+            if oe_sync_df.loc[row,"event"]==2 and oe_sync_df.loc[row-1,"event"]==1:
+                if oe_sync_df.loc[row,"ms_relativ"]==oe_sync_df.loc[row-1,"ms_relativ"]:
+                    if trial == False:
+                        oe_trials.append([oe_sync_df.loc[row,"ms_relativ"],"start"])
+                        #oe_trials.append([oe_sync_df.loc[row+1,"ms_relativ"],"event"])
+                        trial=True
+                    elif trial == True:
+                        oe_trials.append([oe_sync_df.loc[row,"ms_relativ"],"event"])
+                        oe_trials.append([oe_sync_df.loc[row+1,"ms_relativ"],"event"])
+                        oe_trials.append([oe_sync_df.loc[row+1,"ms_relativ"],"end"])
+                        trial=False
+
+            # 1 0 = reward event
+            if oe_sync_df.loc[row,"channel"]==1 and trial:
+                if not(oe_sync_df.loc[row+1,"channel"]==2 and oe_sync_df.loc[row,"ms_relativ"]==oe_sync_df.loc[row+1,"ms_relativ"]):
+                    oe_trials.append([oe_sync_df.loc[row,"ms_relativ"],"reward_event"])
+                    #oe_events.append([oe_sync_df.loc[row+1,"s_relativ"],"reward_end"])
+
+            # 0 1 = normal event
+            if oe_sync_df.loc[row,"channel"]==2:
+                if not(oe_sync_df.loc[row-1,"event"]==1 and oe_sync_df.loc[row,"ms_relativ"]==oe_sync_df.loc[row-1,"ms_relativ"]) and trial:
+                    oe_trials.append([oe_sync_df.loc[row,"ms_relativ"],"event"])
+                    #oe_events.append([oe_sync_df.loc[row+1,"s_relativ"],"reward_end"])
+
+
+        oe_trials_df = pd.DataFrame(oe_trials,columns=["ms_relativ","event_type"]) 
+        return oe_trials_df
+
+    def convert_to_seconds(self, csv_string):
+        utc_time = datetime.strptime(csv_string,
+                                    "%Y-%m-%d %H:%M:%S.%f"
+                                    )
+        return utc_time.timestamp()
+
+    def load_bp_events(self):
+        #specify path
+        if platform.system() == 'Linux':
+            event_folder = (self.folder + "/experiments/gamble_task/setups/gamble_task_recording/sessions")
+        elif platform.system() == 'Windows':
+            folder = (self.folder + r"\experiments\gamble_task\setups\gamble_task_recording\sessions")
+        elif platform.system() == 'Darwin': #macos
+            folder= (self.folder + "/experiments/gamble_task/setups/gamble_task_recording/sessions")
+        
+        ext = ".csv"
+        # read csv
+        session_df = pd.read_csv(path.join(folder,self.session,self.session)+ext,sep=';',header=6)
+        #convert string to datetime
+        session_df["datetime"]=(pd.to_datetime(session_df["PC-TIME"].values,format="%Y-%m-%d %H:%M:%S.%f")).values
+        # get milliseconds
+        session_df["ms_absolut"]=session_df["datetime"].apply(lambda x: x.timestamp()*1000)
+        session_df["ms_relativ"]=session_df["ms_absolut"]-session_df.loc[14,"ms_absolut"]
+
+        return session_df
+
+    def get_sync(self):  #openephys_dir,pybpod_root,pybpod_session):
+        #self.pb_csv = load_bp_events(pybpod_root,pybpod_session)
+        # extract states
+        states_df = self.pb_csv.loc[self.pb_csv.TYPE=='STATE'].copy()
+        states_df = states_df.dropna(axis=0,how='any')
+
+        # get absolut start time of STATES based on trial initiation and relativ STATE time
+        starts = self.pb_csv.loc[self.pb_csv.loc[(self.pb_csv.TYPE=='TRIAL')].index,'ms_relativ'].copy()
+        starts.reset_index(inplace=True,drop=True)
+
+        """ wrong
+        # iterate over rowsct absolut start time for states -> ATENTION only start state = absolute date time all other => same as start + bpod initiial time
+        start = 0
+        start_ms_abs = states_df.loc[states_df.MSG=='start','ms_relativ'].iloc[0]
+        # iterate over rows
+        for idx,row in states_df.iterrows():
+            if row['MSG']=='start':
+                start = row['ms_relativ']
+                states_df.loc[idx,'ms_relativ']=start-start_ms_abs
+            else:
+                states_df.loc[idx,'ms_relativ']=start+row['BPOD-INITIAL-TIME']-start_ms_abs     
+        """
+
+        start_idx = -1
+        trial=False
+        for idx in states_df.index:
+            if states_df.loc[idx,'BPOD-INITIAL-TIME']==0:
+                start_idx+=1
+            states_df.loc[idx,'ms_relativ']=states_df.loc[idx,'BPOD-INITIAL-TIME']*1000+starts.loc[start_idx]
+
+
+        # rount two 5 decimal
+        states_df['ms_relativ'] = (states_df['ms_relativ']).round(2)
+        # sort based on ms absolut
+        states_df.sort_values(by=['ms_relativ'],inplace=True)
+        states_df.reset_index(drop=True,inplace=True)
+        # load openephys ttl
+        #oe_events_df = load_oo_events(openephys_dir)
+        # conver ttl to events
+        #oe_trials_df = extract_events_oo(oe_events_df)
+        # remove end
+        oe_end_idx = self.oe_trials_df.loc[self.oe_trials_df.event_type=='end'].index
+        not_select = self.oe_trials_df.index.isin(oe_end_idx.values-1)
+        oe_trials_df = self.oe_trials_df.loc[~not_select]
+
+
+        # create combined
+        combined_ar = np.zeros([states_df.shape[0],11],dtype=object)
+        combined_ar[:oe_trials_df.shape[0],0:2]=oe_trials_df.values
+        combined_ar[:states_df.shape[0],2:11]=states_df.values
+        combined=pd.DataFrame(combined_ar,columns=["TTL Start norm","TTL Event","CSV Type","CSV Pctime","CSV in trial start","CSV in trial end",
+                                                    "CSV Event","CSV info","CSV Datetime","CSV Start","CSV Start norm"])
+        combined["Delta (TTL-CSV)"]=combined["TTL Start norm"]-combined["CSV Start norm"]
+
+        # model like phenosys sync df for futher analysis
+        combined.reset_index(inplace=True,drop=True)
+
+        # create trial index
+        combined['index']=combined.index
+        # index for all events also wheel not stopping
+        combined['All Trial']=np.nan
+        # add good or bad trial
+        trial = 0
+        for idx,row in combined.iterrows():
+            if row['CSV Event']=='start':
+                trial+=1
+            combined.loc[idx,'All Trial']=trial
+
+        # index for only good events excl wheel ns
+        combined['Trial']=np.nan
+        # add good or bad trial
+        trial = 0
+        for idx,row in combined.iterrows():
+            if row['CSV Event']=='start':
+                trial+=1
+            if row['CSV Event'] not in [
+                                        'wheel_stopping_check_failed_punish',
+                                        'wheel_stopping_check_failed_reset'
+                                        ]:
+                combined.loc[idx,'Trial']=trial
+
+        combined.set_index(['All Trial', 'Trial', 'index'], inplace=True)
+
+        # calculate index of event in each trial and set index
+        combined.set_index((combined.groupby(level=1).cumcount()).rename('Group Index'), append=True, inplace=True)
+
+        return combined
+
+
+
+    def get_usersettings(self):
+        if platform.system() == 'Linux':
+            event_folder = (self.folder + "/experiments/gamble_task/setups/gamble_task_recording/sessions")
+        elif platform.system() == 'Windows':
+            folder = (self.folder + r"\experiments\gamble_task\setups\gamble_task_recording\sessions")
+        elif platform.system() == 'Darwin': #macos
+            folder= (self.folder + "/experiments/gamble_task/setups/gamble_task_recording/sessions")
+
+        with open(path.join(folder,self.session,self.session)+'_usersettings.json') as f: 
+            usersettings_dict = json.load(f) 
+
+        return usersettings_dict
+
+        
+
+
+    def extract_trials(self):
+        trials_df = pd.DataFrame(columns=['index_all_trials','index_good_trials',
+                                        'start',
+                                        'sync_state_1',
+                                        #'reset_rotary_encoder_wheel_stopping_check',
+                                        #'wheel_stopping_check',
+                                        'present_stim',
+                                        'sync_state_2',
+                                        'reset_rotary_encoder_open_loop',
+                                        'open_loop',
+                                        'inter_trial',
+                                        'end_state_signal',
+                                        'end_state',
+                                        'end', 'event', 'length_ms','reward',
+                                        ])
+
+        end = self.pb_csv.loc[self.pb_csv.TYPE=='END-TRIAL','ms_relativ'].copy()
+        end.reset_index(drop=True,inplace=True)
+        end = end.round(2)
+        end_idx = 0
+
+        reward_li = ['no_reward_left', 'small_reward_left', 'big_reward_left', 'no_reward_right', 'small_reward_right', 'big_reward_right', 'stop_open_loop_fail']
+        right_li = ['no_reward_right', 'small_reward_right', 'big_reward_right']
+        left_li = ['no_reward_left', 'small_reward_left', 'big_reward_left']
+        reward_given_li = ['small_reward_left', 'big_reward_left', 'small_reward_right', 'big_reward_right']
+
+        for group, frame in self.combined_df.groupby(level=0):
+            #get index = trial
+            index = [group,group]
+            #get state starts
+            row = frame.loc[:,['CSV Event','CSV Start norm']].reset_index(drop=True).set_index('CSV Event').transpose()
+            states = row.loc['CSV Start norm',
+                                        [ 
+                                        'start',
+                                        'sync_state_1',
+                                        'present_stim',
+                                        'sync_state_2',
+                                        'reset_rotary_encoder_open_loop',
+                                        'open_loop',
+                                        'inter_trial',
+                                        'end_state_signal',
+                                        'end_state',
+                                        ]
+                        ].values.tolist()
+            #get trial end from pb_csv
+            trial_end = end.iloc[end_idx]
+            #get reward event
+            event = frame.loc[frame['CSV Event'].isin(reward_li),'CSV Event'].values[0]
+            #calculate length of trial
+            length_ms = end.iloc[end_idx]-frame.iloc[0]['CSV Start norm']
+            #get reward state 
+            reward = frame.loc[frame['CSV Event'].isin(reward_li),'CSV Start norm'].values[0]
+            
+            #add all to trials_df
+            trials_df.loc[trials_df.shape[0] + 1] = index+states+[trial_end,event,length_ms,reward]
+            end_idx += 1
+            
+        #set reward side 
+        trials_df['right']=False
+        trials_df.loc[trials_df.event.isin(right_li),'right']=True
+        trials_df['left']=False
+        trials_df.loc[trials_df.event.isin(left_li),'left']=True
+
+        #set reward given
+        trials_df['reward_given']=False
+        trials_df.loc[trials_df.event.isin(reward_given_li),'reward_given']=True
+
+        #set probability
+        probabilities_df = pd.DataFrame.from_dict(self.pb_usersettings_dict['probability_list'])
+        blocks_ar = pd.DataFrame.from_dict(self.pb_usersettings_dict['blocks']) #['prob_reward_gamble_block']
+        #
+        probabilities_df['probability']=np.nan
+
+        for group,frame in probabilities_df.groupby('block'):
+            probabilities_df.loc[probabilities_df['block']==group,'probability'] = blocks_ar.loc[group,'prob_reward_gamble_block']
+
+        trials_df['probability']=probabilities_df['probability'].values
+
+        return trials_df
+
+ # Plotting ================================================================================================================================

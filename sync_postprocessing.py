@@ -127,9 +127,6 @@ def load_bp_events(root_dir,session):
     return session_df
 
 def get_sync(openephys_dir,pybpod_root,pybpod_session):
-    
-    
-    # load pybpod events
     pb_events_df = load_bp_events(pybpod_root,pybpod_session)
     # extract states
     states_df = pb_events_df.loc[pb_events_df.TYPE=='STATE']
@@ -145,7 +142,7 @@ def get_sync(openephys_dir,pybpod_root,pybpod_session):
             start_idx+=1
         states_df.loc[idx,'ms_relativ']=states_df.loc[idx,'BPOD-INITIAL-TIME']*1000+starts.loc[start_idx]
 
-    pb_sync_df = states_df.loc[:,["MSG","ms_relativ","BPOD-INITIAL-TIME"]]
+    pb_sync_df = states_df#states_df.loc[:,["MSG","ms_relativ","BPOD-INITIAL-TIME"]]
 
 
     # load openephys ttl
@@ -156,7 +153,7 @@ def get_sync(openephys_dir,pybpod_root,pybpod_session):
     oe_end_idx = oe_trials_df.loc[oe_trials_df.event_type=='end'].index
     not_select = oe_trials_df.index.isin(oe_end_idx.values-1)
     oe_trials_df = oe_trials_df.loc[~not_select]
-    
+
     #oe_trials_df=oe_trials_df.loc[np.invert(oe_trials_df.event_type=='end')]
 
 
@@ -175,30 +172,35 @@ def get_sync(openephys_dir,pybpod_root,pybpod_session):
 
 
     # create combined
-    combined_ar = np.zeros([pb_sync_df.shape[0],4],dtype=object)
-    combined_ar[:oe_trials_df.shape[0],[0,2]]=oe_trials_df.values
-    combined_ar[:pb_sync_df.shape[0],[1,3]]=pb_sync_df.loc[:,["ms_relativ","MSG"]].values
-    combined_df=pd.DataFrame(combined_ar,columns=["oe_ms_relativ","pb_ms_relativ","oe_event","pb_event"])
-    combined_df["delta_pb_oe"]=combined_df["pb_ms_relativ"]-combined_df["oe_ms_relativ"]
+    combined_ar = np.zeros([pb_sync_df.shape[0],11],dtype=object)
+    combined_ar[:oe_trials_df.shape[0],0:2]=oe_trials_df.values
+    combined_ar[:pb_sync_df.shape[0],2:11]=pb_sync_df.values
+    combined_df=pd.DataFrame(combined_ar,columns=["TTL Start norm","TTL Event","CSV Type","CSV Pctime","CSV in trial start","CSV in trial end",
+                                                "CSV Event","CSV info","CSV Datetime","CSV Start","CSV Start norm"])
+    combined_df["Delta (TTL-CSV)"]=combined_df["TTL Start norm"]-combined_df["CSV Start norm"]
 
     # model like phenosys sync df for futher analysis
     combined_df.reset_index(inplace=True,drop=True)
 
     return combined_df
 
+
+
+
+
 # Plotting =============================================================================================
 
 def plt_start_stop_dif(combined_df,figsize=default):
     # get data
-    start=(combined_df.loc[combined_df['pb_event']=='start']).copy()
+    start=(combined_df.loc[combined_df['CSV Event']=='start']).copy()
     start.reset_index(inplace=True,drop=True)
-    stop=(combined_df.loc[combined_df['pb_event']=='end_state']).copy()
+    stop=(combined_df.loc[combined_df['CSV Event']=='end_state']).copy()
     stop.reset_index(inplace=True,drop=True)
 
     # plot data
     fig,ax = plt.subplots(1,1,figsize=figsize)
-    ax.plot(start['delta_pb_oe'],color='r',label='start')
-    ax.plot(stop['delta_pb_oe'],color='g',label='end')
+    ax.plot(start['Delta (TTL-CSV)'],color='r',label='start')
+    ax.plot(stop['Delta (TTL-CSV)'],color='g',label='end')
 
     # labeling
     ax.set_xlabel("Trial")
@@ -209,16 +211,22 @@ def plt_start_stop_dif(combined_df,figsize=default):
     return fig,ax
 
 
-def plt_event_dif(data,all=False,figsize=(12,5.5)):
-    combined_df = data.loc[''].copy()
-    if not(all):
-        not_list = ['wheel_stopping_check','wheel_stopping_check_failed_punish','wheel_stopping_check_failed_reset','reset_rotary_encoder_wheel_stopping_check']
-        bool_filter = ~combined_df.pb_event.isin(not_list)
-        data = combined_df.loc[bool_filter].copy()
+def plt_event_dif(combined_df,plot_all=False,figsize=(12,5.5)):
+    data = combined_df.loc[:,["TTL Start norm","TTL Event", "CSV Event","CSV Start norm","Delta (TTL-CSV)"]].copy()
+    data.columns=['oe_ms_relativ','oe_event','pb_event','pb_ms_relativ','delta_pb_oe']
+
+    if not(plot_all):
+        not_list = ['wheel_stopping_check',
+                    'wheel_stopping_check_failed_punish',
+                    'wheel_stopping_check_failed_reset',
+                    'reset_rotary_encoder_wheel_stopping_check',
+                    'wheel not stopping'
+                    ]
+        bool_filter = ~data.pb_event.isin(not_list)
+        data = data.loc[bool_filter].copy()
         data.reset_index(inplace=True,drop=True)
         data.delta_pb_oe = data.delta_pb_oe.astype(float)
     else:
-        data = combined_df.copy()
         data.delta_pb_oe = data.delta_pb_oe.astype(float)
 
     new_trial = data.loc[data.pb_event=='start']
@@ -237,10 +245,10 @@ def plt_event_dif(data,all=False,figsize=(12,5.5)):
     for trial_idx in new_trial.iterrows():
         ax.text(trial_idx[0]-0.3, line_max+(line_max/50), f"{trial}")
         trial+=1
-    
+
     # move index outside
     g.legend(loc='center left', bbox_to_anchor=(1.01, 0.5))
-                        
+
     ax.set_ylabel('Time Delta [ms]')
     ax.set_xlabel('Event')
     # second x label
