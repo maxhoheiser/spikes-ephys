@@ -266,7 +266,7 @@ def plt_fit_normdist(data,ax=False,norm_fit=True,figsize=[6.4,4.8]):
     title = "Normal distribution fitted to data \n(mu:%.2f, std:%.2f)" % (mu, std)
 
     # namings usw
-    ax.set_xlabel("Bin count")
+    ax.set_xlabel("Trial length difference [ms]")
     ax.set_ylabel("Probability")
     ax.legend() #prop={'size': 14}
     #ax.set_title(title)
